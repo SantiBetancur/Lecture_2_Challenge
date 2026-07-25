@@ -152,18 +152,54 @@ def _crear_variables_derivadas(df, log):
     """Variables derivadas de Fase 2.2 (mínimo 3 exigidas por el reto)."""
     print("\nFASE 2.2 - Feature Engineering de integración")
 
-    # 1. Margen de Utilidad: NaN para SKU fantasma (sin costo conocido).
-    df["Margen_Utilidad"] = df["Precio_Venta_Final"] - df["Costo_Unitario_USD"]
+    # 1. Margen de Utilidad (a nivel de LÍNEA, igual que Ingreso_Bruto).
+    #
+    # Decisión revisada: la primera versión calculaba el margen por unidad
+    # (Precio - Costo) sin multiplicar por Cantidad_Vendida, lo que lo hacía
+    # inconsistente con Ingreso_Bruto (que sí es Cantidad x Precio) y
+    # subestimaba la pérdida real por un factor de ~7x al compararla con el
+    # resto del equipo. Se corrige para que ambas métricas midan lo mismo:
+    # dólares totales de la línea de venta.
+    #
+    # Además, en vez de dejar el margen en NaN para el SKU fantasma (17.5 %
+    # de las transacciones quedaban fuera de la Pregunta 1 por completo), se
+    # imputa un costo estimado usando la tasa de margen MEDIANA observada en
+    # las transacciones con costo real, aplicada al precio de venta de cada
+    # fila. Es una imputación flexible (varía por transacción, no un valor
+    # fijo) y queda marcada con `Costo_Fantasma_Imputado` para que el
+    # análisis siga siendo auditable.
+    costo_conocido = df["Costo_Unitario_USD"]
+    margen_pct_mediano = (
+        (df["Precio_Venta_Final"] - costo_conocido) / df["Precio_Venta_Final"] * 100
+    ).median()
+    costo_estimado = df["Precio_Venta_Final"] * (1 - margen_pct_mediano / 100)
+
+    df["Costo_Fantasma_Imputado"] = costo_conocido.isna()
+    df["Costo_Unitario_USD"] = costo_conocido.fillna(costo_estimado)
+
+    df["Margen_Utilidad_Unitario"] = df["Precio_Venta_Final"] - df["Costo_Unitario_USD"]
     df["Margen_Utilidad_Pct"] = np.where(
         df["Precio_Venta_Final"] > 0,
-        df["Margen_Utilidad"] / df["Precio_Venta_Final"] * 100,
+        df["Margen_Utilidad_Unitario"] / df["Precio_Venta_Final"] * 100,
         np.nan,
     )
+    df["Margen_Utilidad"] = df["Margen_Utilidad_Unitario"] * df["Cantidad_Vendida"]
+
     log.registrar(
-        "Feature Eng.", "Margen_Utilidad(_Pct)", "Precio_Venta_Final - Costo_Unitario_USD",
-        "Queda NaN en SKU fantasma: no se inventa un costo de inventario "
-        "que no existe. Base directa de la Pregunta 1.",
-        int(df["Margen_Utilidad"].notna().sum()),
+        "Feature Eng.", "Margen_Utilidad", "(Precio - Costo) x Cantidad_Vendida",
+        "Se corrige a nivel de línea para ser consistente con Ingreso_Bruto "
+        "(antes solo medía margen por unidad y subestimaba la pérdida total).",
+        len(df),
+    )
+    log.registrar(
+        "Feature Eng.", "Costo_Unitario_USD (SKU fantasma)",
+        f"NaN -> Precio x (1 - {margen_pct_mediano:.1f}% margen mediano conocido)",
+        "Imputación flexible en vez de excluir el 17.5% de SKU fantasma del "
+        "análisis de rentabilidad: se estima su costo con la tasa de margen "
+        "mediana de las transacciones sí controladas, en lugar de un valor "
+        "fijo, y se deja la bandera 'Costo_Fantasma_Imputado' para auditar "
+        "cuáles filas usan un costo real vs. estimado.",
+        int(df["Costo_Fantasma_Imputado"].sum()),
     )
 
     # 2. Brecha de Entrega vs Prometido (alias legible del SLA ya calculado).

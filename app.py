@@ -156,14 +156,32 @@ def construir_health_score_consolidado():
 # FILTROS GLOBALES SOBRE LA FUENTE ÚNICA DE VERDAD
 # ============================================================================
 
+SIN_DATO = "(Sin dato)"
+
+
 def aplicar_filtros_maestro(df):
-    """Renderiza los filtros globales en el sidebar y retorna el df filtrado."""
+    """
+    Renderiza los filtros globales en el sidebar y retorna el df filtrado.
+
+    Los nulos de Categoria/Bodega_Origen (SKU fantasma) y de Ciudad_Destino
+    (canal de venta contaminado el origen) se rellenan con la etiqueta
+    '(Sin dato)' ANTES de armar las opciones del filtro. Así quedan como una
+    categoría explícita, seleccionada por defecto: con la versión anterior,
+    dejar los multiselect en "todos" igual excluía silenciosamente ~13 % de
+    las filas (las de Ciudad_Destino nula), subestimando ingresos y pérdidas
+    en el dashboard frente al total real del dataset.
+    """
     st.sidebar.markdown("### 🔍 Filtros - Fuente Única de Verdad")
 
-    categorias = sorted(df["Categoria"].dropna().unique().tolist())
-    bodegas = sorted(df["Bodega_Origen"].dropna().unique().tolist())
-    ciudades = sorted(df["Ciudad_Destino"].dropna().unique().tolist())
-    canales = sorted(df["Canal_Venta"].dropna().unique().tolist())
+    df_filtrado = df.copy()
+    columnas_filtro = ["Categoria", "Bodega_Origen", "Ciudad_Destino", "Canal_Venta"]
+    for col in columnas_filtro:
+        df_filtrado[col] = df_filtrado[col].fillna(SIN_DATO)
+
+    categorias = sorted(df_filtrado["Categoria"].unique().tolist())
+    bodegas = sorted(df_filtrado["Bodega_Origen"].unique().tolist())
+    ciudades = sorted(df_filtrado["Ciudad_Destino"].unique().tolist())
+    canales = sorted(df_filtrado["Canal_Venta"].unique().tolist())
 
     f_categorias = st.sidebar.multiselect("Categoría:", categorias, default=categorias)
     f_bodegas = st.sidebar.multiselect("Bodega de origen:", bodegas, default=bodegas)
@@ -173,18 +191,9 @@ def aplicar_filtros_maestro(df):
         "Incluir ventas de SKU fantasma (sin inventario)", value=True
     )
 
-    df_filtrado = df.copy()
-    # Los SKU fantasma no tienen Categoria/Bodega; se preservan si el
-    # usuario los incluye explícitamente, para no ocultar el fenómeno.
-    mask_categoria = df_filtrado["Categoria"].isin(f_categorias) | (
-        incluir_sku_fantasma & df_filtrado["SKU_Fantasma"]
-    )
-    mask_bodega = df_filtrado["Bodega_Origen"].isin(f_bodegas) | (
-        incluir_sku_fantasma & df_filtrado["SKU_Fantasma"]
-    )
     df_filtrado = df_filtrado[
-        mask_categoria
-        & mask_bodega
+        df_filtrado["Categoria"].isin(f_categorias)
+        & df_filtrado["Bodega_Origen"].isin(f_bodegas)
         & df_filtrado["Ciudad_Destino"].isin(f_ciudades)
         & df_filtrado["Canal_Venta"].isin(f_canales)
     ]
@@ -212,7 +221,7 @@ def generar_resumen_estadistico(df):
     pct_sku_fantasma = df["SKU_Fantasma"].mean() * 100
 
     top_categorias_margen = (
-        df.dropna(subset=["Categoria"])
+        df[~df["SKU_Fantasma"]]
         .groupby("Categoria")["Margen_Utilidad_Pct"]
         .mean()
         .sort_values()
@@ -601,7 +610,7 @@ elif pagina == "📌 Preguntas Estratégicas":
     with tabs[3]:
         st.subheader("¿Hay categorías con alto stock pero feedback negativo?")
         resumen_cat = (
-            df_maestro.dropna(subset=["Categoria"])
+            df_maestro[~df_maestro["SKU_Fantasma"]]
             .groupby("Categoria")
             .agg(
                 Ratio_Reorden_Prom=("Ratio_Stock_Reorden", "mean"),
