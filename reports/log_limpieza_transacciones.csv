@@ -1,0 +1,18 @@
+paso,etapa,columna,accion,justificacion,registros_afectados
+1,Limpieza,Transaccion_ID,drop_duplicates (exactos + por ID),La transacción es la unidad atómica; un ID repetido inflaría el ingreso.,0
+2,Limpieza,Fecha_Venta,"to_datetime(format='%d/%m/%Y', coerce)",Sin tipo fecha no hay análisis temporal ni cálculo de antigüedad.,0
+3,Feature Eng.,Anio/Mes/Trimestre_Venta,Derivación de calendario,Habilita el análisis de estacionalidad y los filtros del dashboard.,10000
+4,Limpieza,SKU_ID,strip + upper,La llave del JOIN debe ser idéntica en ambos lados; un espacio genera un falso SKU fantasma.,0
+5,Limpieza,Ciudad_Destino,map() de variantes a nombre canónico,"Sin unificar, Bogotá se parte en dos y la correlación por ciudad de la Pregunta 2 queda subestimada.",3
+6,Limpieza,Ciudad_Destino,Canal filtrado en columna -> NaN,"'Ventas_Web' es un canal, no un destino: imputarlo como ciudad fabricaría un mercado inexistente. Se marca y se excluye del geo-análisis.",1290
+7,Limpieza,Cantidad_Vendida,Centinela -5 -> NaN -> mediana,"Los 100 negativos son idénticos (-5) y no correlacionan con 'Devuelto': es un centinela de error, no una devolución. Se imputa con mediana (7) por robustez ante outliers y se conserva bandera.",100
+8,Limpieza,Costo_Envio,groupby('Canal_Venta') -> mediana,La mediana es robusta ante outliers de flete y la segmentación por canal preserva la estructura de costos de cada uno.,834
+9,Limpieza,Estado_Envio,NaN -> 'Sin_Informacion',"Con 16.8 % de nulos, imputar con la moda sesgaría el KPI logístico. La falta de registro es en sí un hallazgo para la junta.",1683
+10,Limpieza,Tiempo_Entrega_Real,Centinela 999 y negativos -> NaN,999 días no es una entrega lenta sino un 'sin dato'. Dejarlo multiplicaría por 50 el promedio y arruinaría la Pregunta 2.,50
+11,Limpieza,Tiempo_Entrega_Real,Imputación mediana por ciudad,El tiempo de entrega es geográfico; la mediana por ciudad respeta las diferencias reales entre plazas.,50
+12,Feature Eng.,Ingreso_Bruto,Cantidad x Precio,Base monetaria para cuantificar la venta invisible (Pregunta 3).,10000
+13,Feature Eng.,Ingreso_Neto_Logistico,Ingreso_Bruto - Costo_Envio,Aísla el peso del flete antes de cruzar con el costo de inventario.,10000
+14,Feature Eng.,Ratio_Envio_Venta,Costo_Envio / Ingreso_Bruto * 100,Detecta ventas pequeñas donde el flete devora el margen.,10000
+15,Feature Eng.,Entrega_Tardia / Brecha_SLA,vs. SLA de 15 días,Convierte el tiempo en un KPI accionable para la Pregunta 2.,4174
+16,Feature Eng.,Antiguedad_Dias,Días desde la venta hasta 04/02/2026,Insumo para el análisis de riesgo operativo (Pregunta 5).,10000
+17,Feature Eng.,Registro_Confiable,Consolidación de banderas de imputación,Permite al dashboard filtrar entre datos observados e imputados: sin esto el análisis no es auditable.,2065
