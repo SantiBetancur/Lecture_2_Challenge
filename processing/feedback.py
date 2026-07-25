@@ -89,7 +89,7 @@ def eliminar_outliers_iqr(df, columnas):
 
 def clean_feedback_dataset(df):
     ##Comentario_texto
-    ##Reemplaza los valores nulos por un dato "Sin Comentario"
+    ##Reemplaza los valores nulos por un dato "Sin Comentario". Como es un dato tipo String, no tiene mucha relevancia a la pregunta de negocio.
     df["Comentario_Texto"] = df["Comentario_Texto"].fillna("Sin comentario")
 
     ##Recomienda_marca
@@ -119,7 +119,7 @@ def clean_feedback_dataset(df):
     return df
 
 
-if __name__ == "__main__":
+def return_feedback():
     df = pd.read_csv("Data_Science_Challenge_02\\data\\feedback_clientes_v2.csv")
 
     print(df.head())
