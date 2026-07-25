@@ -19,6 +19,24 @@ import sys
 import numpy as np
 import pandas as pd
 
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from common import (
+        LogLimpieza,
+        cargar_datos,
+        check_data_quality,
+        comparar_health_scores,
+        imprimir_health_score,
+    )
+else:
+    from .common import (
+        LogLimpieza,
+        cargar_datos,
+        check_data_quality,
+        comparar_health_scores,
+        imprimir_health_score,
+    )
+
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN
 # ---------------------------------------------------------------------------
@@ -63,155 +81,21 @@ ESTADO_DESCONOCIDO = "Sin_Informacion"
 
 
 # ---------------------------------------------------------------------------
-# SISTEMA DE TRAZABILIDAD
+# FASE 1: HEALTH SCORE - reglas de negocio específicas de transacciones
 # ---------------------------------------------------------------------------
+# NOTA: LogLimpieza, cargar_datos, check_data_quality, imprimir_health_score y
+# comparar_health_scores viven en common.py (compartidos con inventory.py y
+# feedback.py). Aquí solo se define qué cuenta como "regla de negocio violada"
+# para ESTE dataset.
 
-class LogLimpieza:
-    """Acumula cada transformación aplicada para exportarla como evidencia."""
-
-    def __init__(self):
-        self.entradas = []
-        self._paso = 0
-
-    def registrar(self, etapa, columna, accion, justificacion, afectados):
-        self._paso += 1
-        self.entradas.append(
-            {
-                "paso": self._paso,
-                "etapa": etapa,
-                "columna": columna,
-                "accion": accion,
-                "justificacion": justificacion,
-                "registros_afectados": int(afectados),
-            }
-        )
-        print(f"  [{self._paso:02d}] {columna:<22} {accion:<38} -> {afectados:>6} reg.")
-
-    def to_frame(self):
-        return pd.DataFrame(self.entradas)
-
-
-# ---------------------------------------------------------------------------
-# FASE 0: CARGA
-# ---------------------------------------------------------------------------
-
-def cargar_datos(ruta):
-    """Carga el dataset crudo con manejo explícito de fallos de E/S."""
-    print(f"\nCargando datos desde: {os.path.normpath(ruta)}")
-    try:
-        df = pd.read_csv(ruta, encoding="utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"No se encontró el dataset en '{ruta}'. "
-            "Verifique que el CSV esté en la carpeta ../data/."
-        )
-    except UnicodeDecodeError:
-        print("  Advertencia: fallo UTF-8, reintentando con latin-1.")
-        df = pd.read_csv(ruta, encoding="latin-1")
-    except pd.errors.EmptyDataError:
-        raise ValueError("El archivo existe pero está vacío o corrupto.")
-    except pd.errors.ParserError as exc:
-        raise ValueError(f"El CSV está malformado y no pudo parsearse: {exc}")
-
-    print(f"  Cargados {len(df):,} registros x {len(df.columns)} columnas")
-    return df
-
-
-# ---------------------------------------------------------------------------
-# FASE 1: HEALTH SCORE
-# ---------------------------------------------------------------------------
-
-def check_data_quality(df, etiqueta="dataset"):
+def _reglas_negocio_transacciones(df):
     """
-    Calcula el Health Score compuesto del dataset.
+    Valida las reglas de negocio propias de transacciones logísticas.
 
-    Ponderación:
-        Completitud    40 %   - ausencia de nulos
-        Unicidad       25 %   - ausencia de duplicados
-        Consistencia   20 %   - ausencia de variantes textuales del mismo valor
-        Validez        15 %   - ausencia de outliers (IQR) y valores imposibles
+    Retorna (dict_validaciones, mask_invalidos) para que common.check_data_quality
+    las incorpore al score de Validez.
     """
-    calidad = {
-        "etiqueta": etiqueta,
-        "resumen_general": {},
-        "duplicados": {},
-        "nulos": {},
-        "inconsistencias": {},
-        "outliers": {},
-        "validaciones": {},
-    }
-
     n = len(df)
-    if n == 0:
-        raise ValueError("No se puede evaluar la calidad de un DataFrame vacío.")
-
-    # --- Unicidad -----------------------------------------------------------
-    dup_totales = int(df.duplicated().sum())
-    if "Transaccion_ID" in df.columns:
-        dup_id = int(df.duplicated(subset=["Transaccion_ID"]).sum())
-    else:
-        dup_id = dup_totales
-    pct_duplicados = dup_totales / n * 100
-
-    calidad["duplicados"] = {
-        "duplicados_exactos": dup_totales,
-        "duplicados_por_id": dup_id,
-        "porcentaje": round(pct_duplicados, 2),
-    }
-
-    # --- Completitud --------------------------------------------------------
-    nulos_pct = (df.isna().sum() / n * 100).round(2)
-    calidad["nulos"] = nulos_pct.to_dict()
-    completitud = 100 - nulos_pct.mean()
-
-    # --- Consistencia textual ----------------------------------------------
-    inconsistencias = {}
-    for col in df.select_dtypes(include=["object", "string"]).columns:
-        serie = df[col].dropna().astype(str)
-        if serie.empty:
-            continue
-        unicos = serie.nunique()
-        clave_norm = serie.str.strip().str.lower()
-        unicos_norm = clave_norm.nunique()
-
-        # Además de las variantes tipográficas, se detectan las variantes
-        # SEMÁNTICAS: 'BOG' y 'Bogotá' son strings distintos pero la misma
-        # entidad. Sin esto el score de consistencia da un falso 100 %.
-        if col == "Ciudad_Destino":
-            canonicos = clave_norm.map(MAPEO_CIUDADES).fillna(clave_norm)
-            unicos_norm = canonicos.nunique()
-
-        reduccion = unicos - unicos_norm
-        inconsistencias[col] = {
-            "valores_unicos": int(unicos),
-            "inconsistencias_detectadas": int(reduccion),
-            "porcentaje_inconsistencia": round(
-                reduccion / unicos * 100 if unicos else 0, 2
-            ),
-        }
-    calidad["inconsistencias"] = inconsistencias
-
-    # --- Validez: outliers por IQR -----------------------------------------
-    # Se excluyen las derivadas de calendario: un año no tiene "outliers"
-    # en sentido estadístico, solo refleja el rango temporal del dataset.
-    excluir_outliers = {"Anio_Venta"}
-    for col in df.select_dtypes(include=[np.number]).columns:
-        if col in excluir_outliers:
-            continue
-        valores = df[col].dropna()
-        if valores.empty:
-            continue
-        q1, q3 = valores.quantile(0.25), valores.quantile(0.75)
-        iqr = q3 - q1
-        low, high = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-        outliers = valores[(valores < low) | (valores > high)]
-        calidad["outliers"][col] = {
-            "cantidad_outliers": int(len(outliers)),
-            "porcentaje": round(len(outliers) / len(valores) * 100, 2),
-            "rango_valido": f"[{round(low, 2)}, {round(high, 2)}]",
-        }
-
-    # --- Validaciones de reglas de negocio ---------------------------------
     val = {}
     if "Cantidad_Vendida" in df.columns:
         neg = int((df["Cantidad_Vendida"] < 0).sum())
@@ -238,6 +122,7 @@ def check_data_quality(df, etiqueta="dataset"):
             "cantidad": int(clave.isin(CIUDADES_INVALIDAS).sum()),
             "valores_unicos": int(df["Ciudad_Destino"].nunique()),
         }
+
     # Registros que violan al menos una regla de negocio dura. Se cuentan
     # como conjunto (no como suma) para no penalizar dos veces la misma fila.
     mask_invalidos = pd.Series(False, index=df.index)
@@ -255,68 +140,19 @@ def check_data_quality(df, etiqueta="dataset"):
             df["Ciudad_Destino"].astype(str).str.strip().str.lower()
             .isin(CIUDADES_INVALIDAS)
         )
+    return val, mask_invalidos
 
-    pct_reglas_violadas = mask_invalidos.sum() / n * 100
-    val["registros_con_regla_violada"] = {
-        "cantidad": int(mask_invalidos.sum()),
-        "porcentaje": round(pct_reglas_violadas, 2),
-    }
-    calidad["validaciones"] = val
 
-    # --- Score compuesto ----------------------------------------------------
-    score_completitud = completitud
-    score_unicidad = max(0, 100 - pct_duplicados * 2)
-    score_consistencia = 100 - (
-        sum(v["porcentaje_inconsistencia"] for v in inconsistencias.values())
-        / max(len(inconsistencias), 1)
+def _auditar_transacciones(df, etiqueta):
+    """Envoltorio de common.check_data_quality con la configuración de este dataset."""
+    return check_data_quality(
+        df,
+        etiqueta=etiqueta,
+        id_col="Transaccion_ID",
+        excluir_outliers={"Anio_Venta"},
+        mapeos_categoricos={"Ciudad_Destino": MAPEO_CIUDADES},
+        reglas_negocio=_reglas_negocio_transacciones,
     )
-
-    # La validez pesa dos señales: dispersión estadística (outliers IQR) y
-    # violación de reglas de negocio. Un centinela de 999 días es válido para
-    # el IQR pero imposible para el negocio, así que sin el segundo término
-    # el score no reflejaría el problema real del dataset.
-    pct_outliers = (
-        sum(v["porcentaje"] for v in calidad["outliers"].values())
-        / max(len(calidad["outliers"]), 1)
-        if calidad["outliers"]
-        else 0
-    )
-    score_validez = max(
-        0, 100 - (pct_outliers * 0.4) - (pct_reglas_violadas * 0.6 * 3)
-    )
-
-    health = (
-        score_completitud * 0.40
-        + score_unicidad * 0.25
-        + score_consistencia * 0.20
-        + score_validez * 0.15
-    )
-
-    calidad["resumen_general"] = {
-        "etiqueta": etiqueta,
-        "health_score_total": round(health, 2),
-        "score_completitud": round(score_completitud, 2),
-        "score_unicidad": round(score_unicidad, 2),
-        "score_consistencia": round(score_consistencia, 2),
-        "score_validez": round(score_validez, 2),
-        "total_registros": n,
-        "total_columnas": len(df.columns),
-        "estado": _clasificar_health_score(health),
-    }
-    return calidad
-
-
-def _clasificar_health_score(score):
-    """Traduce el score numérico a una categoría legible para la junta."""
-    if score >= 90:
-        return "Excelente"
-    if score >= 80:
-        return "Muy Bueno"
-    if score >= 70:
-        return "Bueno"
-    if score >= 60:
-        return "Aceptable"
-    return "Requiere Mejora"
 
 
 # ---------------------------------------------------------------------------
@@ -726,7 +562,7 @@ def ejecutar_pipeline():
 
     # Fase 0 - Carga y auditoría inicial
     df_original = cargar_datos(DATA_PATH)
-    salud_antes = check_data_quality(df_original, "Antes de la curación")
+    salud_antes = _auditar_transacciones(df_original, "Antes de la curación")
     imprimir_health_score(salud_antes)
 
     # Fase 2 - Limpieza
@@ -742,12 +578,10 @@ def ejecutar_pipeline():
     df = imputar_costos_envio(df, log)
     df = imputar_estado_envio(df, log)
     df = tratar_tiempo_entrega(df, log)
-
-    # Fase 3 - Feature engineering
     df = crear_variables_derivadas(df, log)
 
     # Fase 4 - Auditoría final
-    salud_despues = check_data_quality(df, "Después de la curación")
+    salud_despues = _auditar_transacciones(df, "Después de la curación")
     imprimir_health_score(salud_despues)
     comparativo = comparar_health_scores(salud_antes, salud_despues)
 
@@ -772,6 +606,16 @@ def ejecutar_pipeline():
         )
 
     return df, df_log, comparativo
+
+
+# ---------------------------------------------------------------------------
+# INTERFAZ ESTÁNDAR PARA app.py
+# ---------------------------------------------------------------------------
+
+def procesar_transacciones():
+    """Interfaz estándar para app.py: retorna únicamente el dataset limpio."""
+    df_limpio, _df_log, _df_health = ejecutar_pipeline()
+    return df_limpio
 
 
 # ---------------------------------------------------------------------------

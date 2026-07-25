@@ -1,0 +1,10 @@
+paso,etapa,columna,accion,justificacion,registros_afectados
+1,Limpieza,Feedback_ID,drop_duplicates (exactos + por ID),El Feedback_ID es la unidad atómica de una opinión; un ID repetido duplica la voz de un mismo cliente en el NPS agregado.,500
+2,Limpieza,Rating_Producto,"Fuera de [1,5] -> NaN -> mediana (3)","Se detectaron 27 valores como 45 o 99 en una escala 1-5; son errores de captura, no calificaciones reales. La mediana es robusta ante ese tipo de outlier extremo.",27
+3,Limpieza,Edad_Cliente,> 100 -> NaN -> mediana (50),195 años no es una edad humana plausible; se trata como dato faltante y se imputa con la mediana por ser robusta ante los propios valores extremos que la contaminan.,20
+4,Limpieza,Recomienda_Marca,map() a Si/No/Talvez; NaN -> 'Sin_Respuesta',"Con 25 % de nulos, imputar con la moda inventaría la opinión de una cuarta parte de los clientes; se preserva como hallazgo.",999
+5,Limpieza,Ticket_Soporte_Abierto,Normalización de codificación mixta -> bool,El campo mezcla 'Sí'/'No' con '1'/'0' y sufre fallos de tilde en origen; se mapea por la primera letra en minúscula para no perder registros por un acento corrupto.,955
+6,Limpieza,Comentario_Texto,Placeholders y NaN -> 'Sin_Comentario',"Es texto libre de baja relevancia cuantitativa; unificar 'N/A', '---' y los nulos reales evita fragmentar la categoría de 'sin opinión escrita'.",1152
+7,Feature Eng.,Segmento_NPS,"Promotor >=50 / Pasivo [0,50) / Detractor <0",La escala -100/100 es el estándar de NPS; se conserva el valor y se deriva un segmento legible para la junta directiva.,4000
+8,Feature Eng.,Rating_Promedio,"mean(Rating_Producto, Rating_Logistica)",Resume en un solo KPI la experiencia de producto y de entrega.,4000
+9,Feature Eng.,Registro_Confiable,Consolidación de banderas de imputación,Permite filtrar entre opiniones observadas e imputadas: sin esto el análisis de feedback no es auditable.,40

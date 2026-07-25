@@ -1,0 +1,8 @@
+metrica,antes,despues,delta
+health_score_total,93.48,99.46,5.98
+score_completitud,97.48,99.1,1.62
+score_unicidad,100.0,100.0,0.0
+score_consistencia,91.67,100.0,8.33
+score_validez,74.36,98.77,24.41
+total_registros,2500.0,2500.0,0.0
+total_columnas,8.0,18.0,10.0

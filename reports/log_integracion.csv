@@ -1,0 +1,7 @@
+paso,etapa,columna,accion,justificacion,registros_afectados
+1,Integración,SKU_ID,"merge(transacciones, inventario, how='left')",Se preservan todas las ventas aunque el SKU no exista en el maestro; eliminarlas subestimaría el ingreso real (Pregunta 3).,1751
+2,Integración,Transaccion_ID,"merge(+ feedback agregado, how='left')","El feedback es una muestra voluntaria (4,000 opiniones para 10,000 ventas); no todas las transacciones tienen voz de cliente y eso debe quedar visible, no imputado.",3292
+3,Feature Eng.,Margen_Utilidad(_Pct),Precio_Venta_Final - Costo_Unitario_USD,Queda NaN en SKU fantasma: no se inventa un costo de inventario que no existe. Base directa de la Pregunta 1.,8249
+4,Feature Eng.,Brecha_Entrega_vs_Prometido,Tiempo_Entrega_Real - SLA(15d),Nombre de negocio para la brecha ya calculada en transacciones; insumo directo de la Pregunta 2.,10000
+5,Feature Eng.,Ingreso_En_Riesgo,Ingreso_Bruto donde SKU_Fantasma,"Cuantifica en USD el ingreso que hoy no tiene respaldo de inventario, sin mezclarlo con las ventas sí controladas.",1751
+6,Feature Eng.,Ratio_Soporte_Categoria,groupby('Categoria').transform('mean'),Tasa de tickets de soporte por categoría; contrasta stock alto con fricción de servicio en la Pregunta 4.,10000

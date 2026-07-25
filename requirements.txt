@@ -1,2 +1,8 @@
 pandas
 numpy
+streamlit
+plotly
+groq
+matplotlib
+reportlab
+statsmodels
