@@ -119,7 +119,7 @@ def clean_feedback_dataset(df):
     return df
 
 
-def return_feedback():
+def get_clean_feedback():
     df = pd.read_csv("Data_Science_Challenge_02\\data\\feedback_clientes_v2.csv")
 
     print(df.head())
