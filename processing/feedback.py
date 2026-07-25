@@ -66,6 +66,25 @@ def check_for_outliers(df):
 
 
 #### Limpieza
+def eliminar_outliers_iqr(df, columnas):
+    """
+    Elimina las filas que contienen outliers usando el método IQR.
+    """
+    df_limpio = df.copy()
+
+    for col in columnas:
+        Q1 = df_limpio[col].quantile(0.25)
+        Q3 = df_limpio[col].quantile(0.75)
+        IQR = Q3 - Q1
+
+        limite_inferior = Q1 - 1.5 * IQR
+        limite_superior = Q3 + 1.5 * IQR
+
+        df_limpio = df_limpio[
+            (df_limpio[col] >= limite_inferior) & (df_limpio[col] <= limite_superior)
+        ]
+
+    return df_limpio
 
 
 def clean_feedback_dataset(df):
@@ -80,11 +99,12 @@ def clean_feedback_dataset(df):
         df["Recomienda_Marca"].mode()[0]
     )
 
-    # Eliminar errores de captura
-    df = df[df["Edad_Cliente"] <= 100]
-    df = df[df["Rating_Producto"] <= 5]
+    # Eliminar errores de captura usando el IQR
+    # Eliminar outliers usando IQR
     df = df[df["Satisfaccion_NPS"] >= 0]
-    # Eliminar registros con satisfacción negativa
+    columnas_numericas = ["Edad_Cliente", "Rating_Producto", "Satisfaccion_NPS"]
+
+    df = eliminar_outliers_iqr(df, columnas_numericas)
 
     # -----------------------------
     # HEALTH SCORE DESPUÉS
