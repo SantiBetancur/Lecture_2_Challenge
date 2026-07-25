@@ -15,6 +15,7 @@ Salidas generadas en ../data y ../reports:
 
 import os
 import sys
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -711,86 +712,204 @@ def comparar_health_scores(antes, despues):
 
 
 # ---------------------------------------------------------------------------
-# PIPELINE
+# RESULTADO DEL PIPELINE
 # ---------------------------------------------------------------------------
 
-def ejecutar_pipeline():
-    """Orquesta la auditoría, limpieza, ingeniería y exportación."""
-    print("=" * 78)
-    print("PIPELINE DE CURACIÓN - TRANSACCIONES LOGÍSTICAS v2")
-    print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
-    print("=" * 78)
+@dataclass
+class ResultadoCuracion:
+    """
+    Contenedor de todos los artefactos del pipeline.
 
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    log = LogLimpieza()
+    Se usa cuando el consumidor necesita algo más que el DataFrame, por
+    ejemplo el dashboard de Streamlit, que debe mostrar el Health Score
+    comparativo y ofrecer el log de limpieza como descarga.
+    """
 
-    # Fase 0 - Carga y auditoría inicial
-    df_original = cargar_datos(DATA_PATH)
-    salud_antes = check_data_quality(df_original, "Antes de la curación")
-    imprimir_health_score(salud_antes)
+    df: pd.DataFrame
+    log: pd.DataFrame
+    health_antes: dict
+    health_despues: dict
+    comparativo: pd.DataFrame
 
-    # Fase 2 - Limpieza
-    print(f"\n{'=' * 78}")
-    print("FASE 2 - LIMPIEZA Y ESTANDARIZACIÓN")
-    print("=" * 78)
-    df = df_original.copy()
-    df = eliminar_duplicados(df, log)
-    df = normalizar_fechas(df, log)
-    df = normalizar_sku(df, log)
-    df = normalizar_ciudades(df, log)
-    df = tratar_cantidad_vendida(df, log)
-    df = imputar_costos_envio(df, log)
-    df = imputar_estado_envio(df, log)
-    df = tratar_tiempo_entrega(df, log)
+    def resumen(self):
+        """Métricas de una línea para tarjetas del dashboard."""
+        return {
+            "registros": len(self.df),
+            "columnas": len(self.df.columns),
+            "transformaciones": len(self.log),
+            "health_antes": self.health_antes["resumen_general"]["health_score_total"],
+            "health_despues": self.health_despues["resumen_general"]["health_score_total"],
+            "registros_confiables": int(self.df["Registro_Confiable"].sum()),
+            "pct_confiables": round(self.df["Registro_Confiable"].mean() * 100, 2),
+            "ingreso_bruto_total": round(self.df["Ingreso_Bruto"].sum(), 2),
+        }
 
-    # Fase 3 - Feature engineering
-    df = crear_variables_derivadas(df, log)
 
-    # Fase 4 - Auditoría final
-    salud_despues = check_data_quality(df, "Después de la curación")
-    imprimir_health_score(salud_despues)
-    comparativo = comparar_health_scores(salud_antes, salud_despues)
+# ---------------------------------------------------------------------------
+# PIPELINE (punto de entrada importable)
+# ---------------------------------------------------------------------------
 
-    # Fase 5 - Exportación
-    print(f"\n{'=' * 78}")
-    print("EXPORTACIÓN DE ARTEFACTOS")
-    print("=" * 78)
+def procesar_transacciones(
+    ruta_entrada=None,
+    exportar=True,
+    verbose=True,
+    retornar_artefactos=False,
+):
+    """
+    Ejecuta la curación completa del dataset de transacciones.
+
+    Este es el punto de entrada del módulo. Está diseñado para ser importado
+    desde el script de integración (merge) y desde la app de Streamlit sin
+    provocar efectos secundarios al importar.
+
+    Parámetros
+    ----------
+    ruta_entrada : str, opcional
+        Ruta al CSV crudo. Si es None usa DATA_PATH (../data/).
+    exportar : bool, por defecto True
+        Escribe el CSV limpio, el log y el Health Score en disco.
+        Ponerlo en False evita E/S innecesaria al llamarlo desde el merge.
+    verbose : bool, por defecto True
+        Imprime el detalle en consola. En Streamlit conviene False.
+    retornar_artefactos : bool, por defecto False
+        Si es False retorna solo el DataFrame limpio (uso típico del merge).
+        Si es True retorna un objeto ResultadoCuracion con log y Health Score.
+
+    Retorna
+    -------
+    pandas.DataFrame o ResultadoCuracion
+
+    Ejemplos
+    --------
+    Uso desde el script de integración:
+
+    >>> from lg_transactions import procesar_transacciones
+    >>> df_ventas = procesar_transacciones(exportar=False, verbose=False)
+    >>> df_unificado = df_ventas.merge(df_inventario, on="SKU_ID", how="left")
+
+    Uso desde Streamlit:
+
+    >>> res = procesar_transacciones(retornar_artefactos=True, verbose=False)
+    >>> st.dataframe(res.comparativo)
+    >>> st.download_button("Log de limpieza", res.log.to_csv(index=False))
+    """
+    ruta = ruta_entrada or DATA_PATH
+
+    # Silencia la salida del pipeline sin tocar cada print individual.
+    stdout_original = sys.stdout
+    if not verbose:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+
     try:
-        df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
-        print(f"  Dataset limpio : {os.path.normpath(OUTPUT_PATH)}")
+        print("=" * 78)
+        print("PIPELINE DE CURACIÓN - TRANSACCIONES LOGÍSTICAS v2")
+        print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
+        print("=" * 78)
+
+        log = LogLimpieza()
+
+        # Fase 0 - Carga y auditoría inicial
+        df_original = cargar_datos(ruta)
+        salud_antes = check_data_quality(df_original, "Antes de la curación")
+        imprimir_health_score(salud_antes)
+
+        # Fase 2 - Limpieza
+        print(f"\n{'=' * 78}")
+        print("FASE 2 - LIMPIEZA Y ESTANDARIZACIÓN")
+        print("=" * 78)
+        df = df_original.copy()
+        df = eliminar_duplicados(df, log)
+        df = normalizar_fechas(df, log)
+        df = normalizar_sku(df, log)
+        df = normalizar_ciudades(df, log)
+        df = tratar_cantidad_vendida(df, log)
+        df = imputar_costos_envio(df, log)
+        df = imputar_estado_envio(df, log)
+        df = tratar_tiempo_entrega(df, log)
+
+        # Fase 3 - Feature engineering
+        df = crear_variables_derivadas(df, log)
+
+        # Fase 4 - Auditoría final
+        salud_despues = check_data_quality(df, "Después de la curación")
+        imprimir_health_score(salud_despues)
+        comparativo = comparar_health_scores(salud_antes, salud_despues)
 
         df_log = log.to_frame()
-        df_log.to_csv(LOG_PATH, index=False, encoding="utf-8")
-        print(f"  Log de limpieza: {os.path.normpath(LOG_PATH)} "
-              f"({len(df_log)} transformaciones)")
 
-        comparativo.to_csv(HEALTH_PATH, index=False, encoding="utf-8")
-        print(f"  Health Score   : {os.path.normpath(HEALTH_PATH)}")
-    except PermissionError:
-        raise PermissionError(
-            "No se pudo escribir la salida. Cierre los CSV si están abiertos en Excel."
+        # Metadatos nativos de pandas. Advertencia: df.attrs NO sobrevive a un
+        # merge, así que el script de integración debe guardar el log aparte.
+        df.attrs["origen"] = "transacciones_logistica_v2"
+        df.attrs["health_score_antes"] = salud_antes["resumen_general"][
+            "health_score_total"
+        ]
+        df.attrs["health_score_despues"] = salud_despues["resumen_general"][
+            "health_score_total"
+        ]
+
+        # Fase 5 - Exportación (opcional)
+        if exportar:
+            print(f"\n{'=' * 78}")
+            print("EXPORTACIÓN DE ARTEFACTOS")
+            print("=" * 78)
+            os.makedirs(REPORTS_DIR, exist_ok=True)
+            try:
+                df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
+                print(f"  Dataset limpio : {os.path.normpath(OUTPUT_PATH)}")
+
+                df_log.to_csv(LOG_PATH, index=False, encoding="utf-8")
+                print(f"  Log de limpieza: {os.path.normpath(LOG_PATH)} "
+                      f"({len(df_log)} transformaciones)")
+
+                comparativo.to_csv(HEALTH_PATH, index=False, encoding="utf-8")
+                print(f"  Health Score   : {os.path.normpath(HEALTH_PATH)}")
+            except PermissionError:
+                raise PermissionError(
+                    "No se pudo escribir la salida. Cierre los CSV si están "
+                    "abiertos en Excel."
+                )
+    finally:
+        # Restaura stdout incluso si el pipeline falla a mitad de camino.
+        if not verbose:
+            sys.stdout.close()
+            sys.stdout = stdout_original
+
+    if retornar_artefactos:
+        return ResultadoCuracion(
+            df=df,
+            log=df_log,
+            health_antes=salud_antes,
+            health_despues=salud_despues,
+            comparativo=comparativo,
         )
-
-    return df, df_log, comparativo
+    return df
 
 
 # ---------------------------------------------------------------------------
-# MAIN
+# MAIN (solo para pruebas en ejecución directa)
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def main():
+    """Ejecución standalone del módulo para verificación local."""
     try:
-        df_limpio, df_log, df_health = ejecutar_pipeline()
+        resultado = procesar_transacciones(
+            exportar=True, verbose=True, retornar_artefactos=True
+        )
     except (FileNotFoundError, ValueError, PermissionError) as exc:
         print(f"\nERROR: {exc}")
-        sys.exit(1)
+        return 1
 
+    r = resultado.resumen()
     print(f"\n{'=' * 78}")
     print("PROCESO COMPLETADO")
     print("=" * 78)
-    print(f"  Registros finales     : {len(df_limpio):,}")
-    print(f"  Columnas finales      : {len(df_limpio.columns)}")
-    print(f"  Transformaciones      : {len(df_log)}")
-    print(f"  Registros confiables  : {int(df_limpio['Registro_Confiable'].sum()):,} "
-          f"({df_limpio['Registro_Confiable'].mean() * 100:.1f} %)")
-    print(f"  Ingreso bruto total   : USD {df_limpio['Ingreso_Bruto'].sum():,.2f}")
+    print(f"  Registros finales     : {r['registros']:,}")
+    print(f"  Columnas finales      : {r['columnas']}")
+    print(f"  Transformaciones      : {r['transformaciones']}")
+    print(f"  Health Score          : {r['health_antes']} -> {r['health_despues']}")
+    print(f"  Registros confiables  : {r['registros_confiables']:,} "
+          f"({r['pct_confiables']} %)")
+    print(f"  Ingreso bruto total   : USD {r['ingreso_bruto_total']:,.2f}")
+    print("\n  Listo para el merge con inventario y feedback vía 'SKU_ID'.")
+    return 0
+

@@ -137,3 +137,4 @@ def get_clean_feedback():
     dataset_limpio = clean_feedback_dataset(df)
     print(dataset_limpio.describe())
     print(dataset_limpio.info())
+    return dataset_limpio

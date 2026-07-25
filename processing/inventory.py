@@ -1,6 +1,6 @@
 import pandas as pd
 
-file_path = "../data/inventario_central_v2.csv"
+file_path = "data/inventario_central_v2.csv"
 
 
 df = pd.read_csv(file_path, sep=",")
