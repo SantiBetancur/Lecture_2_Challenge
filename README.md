@@ -95,8 +95,16 @@ El detalle línea por línea, con justificación, está en `reports/log_limpieza
 
 - **SKU Fantasma** (`processing/integracion.py`): 480 de 2,889 SKUs de transacciones
   (~17%) no existen en el inventario. Se conservan todas las ventas (`merge how='left'`)
-  para no ocultar el fenómeno, pero se excluyen del cálculo de margen (sin costo conocido)
-  y se cuantifican aparte en `Ingreso_En_Riesgo` (Pregunta 3).
+  para no ocultar el fenómeno y se cuantifican aparte en `Ingreso_En_Riesgo` (Pregunta 3).
+  Para el margen, en vez de dejarlas en `NaN` (lo que las excluía del 100% del análisis de
+  rentabilidad), se les imputa un costo estimado con la tasa de margen **mediana** de las
+  transacciones con costo real, aplicada al precio de cada línea — una imputación flexible
+  que varía por transacción en vez de un valor fijo, y queda marcada con la bandera
+  `Costo_Fantasma_Imputado` para auditar qué filas usan costo real vs. estimado.
+- **Margen a nivel de línea, no por unidad**: `Margen_Utilidad` es
+  `(Precio_Venta_Final - Costo_Unitario_USD) x Cantidad_Vendida`, igual que `Ingreso_Bruto`.
+  La primera versión calculaba solo el margen unitario, lo que subestimaba la pérdida total
+  por un factor de ~7x al no multiplicar por la cantidad vendida de cada línea.
 - **Centinelas de error**: `Cantidad_Vendida = -5` y `Tiempo_Entrega_Real = 999` son
   códigos de error del sistema origen, no eventos de negocio; se tratan como nulos y se
   imputan con la mediana (robusta ante outliers), segmentada por canal o ciudad según el

@@ -578,6 +578,8 @@ def ejecutar_pipeline():
     df = imputar_costos_envio(df, log)
     df = imputar_estado_envio(df, log)
     df = tratar_tiempo_entrega(df, log)
+
+    # Fase 3 - Feature engineering
     df = crear_variables_derivadas(df, log)
 
     # Fase 4 - Auditoría final
