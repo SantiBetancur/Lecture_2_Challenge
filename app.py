@@ -120,6 +120,30 @@ def leer_health_score(nombre_dataset):
     return None
 
 
+RAW_CSV_POR_DATASET = {
+    "transacciones": "transacciones_logistica_v2.csv",
+    "inventario": "inventario_central_v2.csv",
+    "feedback": "feedback_clientes_v2.csv",
+}
+
+
+@st.cache_data(show_spinner=False)
+def resumen_nulidad_original(nombre_dataset):
+    """% de nulidad por columna del CSV crudo, tal como exige la Fase 1 del reto."""
+    archivo = RAW_CSV_POR_DATASET.get(nombre_dataset)
+    if archivo is None:
+        return None
+    ruta = os.path.join(SCRIPT_DIR, "data", archivo)
+    if not os.path.exists(ruta):
+        return None
+    df_raw = pd.read_csv(ruta)
+    nulidad = (df_raw.isna().sum() / len(df_raw) * 100).round(2)
+    resumen = nulidad[nulidad > 0].sort_values(ascending=False).reset_index()
+    resumen.columns = ["columna", "pct_nulos"]
+    duplicados = int(df_raw.duplicated().sum())
+    return resumen, duplicados, len(df_raw)
+
+
 def construir_reporte_limpieza_consolidado():
     """Concatena los 3 logs de limpieza en un único CSV descargable."""
     patrones = {
@@ -391,6 +415,16 @@ if pagina == "📈 Dashboard Principal":
                 c2.metric("Después", f"{fila_total['despues']:.1f}/100")
                 c3.metric("Mejora", f"{fila_total['delta']:+.1f} pts")
                 st.dataframe(df_health, use_container_width=True, hide_index=True)
+
+                resultado_nulidad = resumen_nulidad_original(nombre)
+                if resultado_nulidad is not None:
+                    resumen_nulos, duplicados, n_original = resultado_nulidad
+                    with st.expander(f"🔎 % de nulidad por columna y duplicados (dataset original, {n_original:,} filas)"):
+                        st.write(f"**Duplicados exactos detectados:** {duplicados:,}")
+                        if not resumen_nulos.empty:
+                            st.dataframe(resumen_nulos, use_container_width=True, hide_index=True)
+                        else:
+                            st.caption("Sin columnas con valores nulos en el dataset crudo.")
             else:
                 st.info("Ejecuta processing/*.py para generar el Health Score.")
 

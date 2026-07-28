@@ -465,88 +465,6 @@ def crear_variables_derivadas(df, log):
 
 
 # ---------------------------------------------------------------------------
-# REPORTES
-# ---------------------------------------------------------------------------
-
-def imprimir_health_score(calidad):
-    """Muestra en consola el detalle de un Health Score."""
-    r = calidad["resumen_general"]
-    print(f"\n{'=' * 78}")
-    print(f"HEALTH SCORE - {r['etiqueta'].upper()}")
-    print("=" * 78)
-    print(f"  Score total    : {r['health_score_total']}/100  ({r['estado']})")
-    print(f"  Completitud    : {r['score_completitud']}")
-    print(f"  Unicidad       : {r['score_unicidad']}")
-    print(f"  Consistencia   : {r['score_consistencia']}")
-    print(f"  Validez        : {r['score_validez']}")
-    print(f"  Dimensiones    : {r['total_registros']:,} x {r['total_columnas']}")
-
-    nulos = {k: v for k, v in calidad["nulos"].items() if v > 0}
-    if nulos:
-        print("\n  Nulos por columna:")
-        for col, pct in sorted(nulos.items(), key=lambda x: -x[1]):
-            print(f"    - {col:<28} {pct:>6.2f} %")
-    else:
-        print("\n  Sin valores nulos.")
-
-    incons = {
-        k: v
-        for k, v in calidad["inconsistencias"].items()
-        if v["inconsistencias_detectadas"] > 0
-    }
-    if incons:
-        print("\n  Inconsistencias textuales:")
-        for col, d in incons.items():
-            print(
-                f"    - {col:<28} {d['inconsistencias_detectadas']} variantes "
-                f"de {d['valores_unicos']} valores"
-            )
-
-    if calidad["outliers"]:
-        print("\n  Outliers (IQR):")
-        for col, d in calidad["outliers"].items():
-            if d["cantidad_outliers"] > 0:
-                print(
-                    f"    - {col:<28} {d['cantidad_outliers']:>5} "
-                    f"({d['porcentaje']:>5.2f} %)  válido: {d['rango_valido']}"
-                )
-
-    print("\n  Validaciones de negocio:")
-    for nombre, detalle in calidad["validaciones"].items():
-        print(f"    - {nombre}: {detalle}")
-
-
-def comparar_health_scores(antes, despues):
-    """Construye la tabla comparativa antes/después exigida por el challenge."""
-    a, d = antes["resumen_general"], despues["resumen_general"]
-    metricas = [
-        "health_score_total",
-        "score_completitud",
-        "score_unicidad",
-        "score_consistencia",
-        "score_validez",
-        "total_registros",
-        "total_columnas",
-    ]
-    comp = pd.DataFrame(
-        {
-            "metrica": metricas,
-            "antes": [a[m] for m in metricas],
-            "despues": [d[m] for m in metricas],
-        }
-    )
-    comp["delta"] = (comp["despues"] - comp["antes"]).round(2)
-
-    print(f"\n{'=' * 78}")
-    print("COMPARATIVO HEALTH SCORE: ANTES vs. DESPUÉS")
-    print("=" * 78)
-    print(comp.to_string(index=False))
-    print(f"\n  Estado inicial : {a['estado']}")
-    print(f"  Estado final   : {d['estado']}")
-    return comp
-
-
-# ---------------------------------------------------------------------------
 # PIPELINE
 # ---------------------------------------------------------------------------
 
@@ -557,7 +475,6 @@ def ejecutar_pipeline():
     print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
     print("=" * 78)
 
-    os.makedirs(REPORTS_DIR, exist_ok=True)
     log = LogLimpieza()
 
     # Fase 0 - Carga y auditoría inicial
@@ -587,15 +504,17 @@ def ejecutar_pipeline():
     imprimir_health_score(salud_despues)
     comparativo = comparar_health_scores(salud_antes, salud_despues)
 
+    df_log = log.to_frame()
+
     # Fase 5 - Exportación
     print(f"\n{'=' * 78}")
     print("EXPORTACIÓN DE ARTEFACTOS")
     print("=" * 78)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
     try:
         df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
         print(f"  Dataset limpio : {os.path.normpath(OUTPUT_PATH)}")
 
-        df_log = log.to_frame()
         df_log.to_csv(LOG_PATH, index=False, encoding="utf-8")
         print(f"  Log de limpieza: {os.path.normpath(LOG_PATH)} "
               f"({len(df_log)} transformaciones)")
@@ -621,7 +540,7 @@ def procesar_transacciones():
 
 
 # ---------------------------------------------------------------------------
-# MAIN
+# MAIN (solo para pruebas en ejecución directa)
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -640,3 +559,5 @@ if __name__ == "__main__":
     print(f"  Registros confiables  : {int(df_limpio['Registro_Confiable'].sum()):,} "
           f"({df_limpio['Registro_Confiable'].mean() * 100:.1f} %)")
     print(f"  Ingreso bruto total   : USD {df_limpio['Ingreso_Bruto'].sum():,.2f}")
+    print("\n  Listo para el merge con inventario y feedback vía 'SKU_ID'.")
+
