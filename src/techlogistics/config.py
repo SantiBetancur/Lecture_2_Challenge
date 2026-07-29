@@ -35,7 +35,11 @@ HEALTH_SCORE_INVENTORY = REPORTS_QUALITY / "health_score_inventario.csv"
 HEALTH_SCORE_TRANSACTIONS = REPORTS_QUALITY / "health_score_transacciones.csv"
 HEALTH_SCORE_FEEDBACK = REPORTS_QUALITY / "health_score_feedback.csv"
 
-REPORT_PDF = REPORTS_DELIVERABLES / "Informe_Hallazgos_TechLogistics.pdf"
+REPORT_PDF_FILENAME = (
+    "Informe_Consultoria_TechLogistics_Junta_Directiva_Hallazgos_Estrategicos.pdf"
+)
+REPORT_PDF = ROOT / REPORT_PDF_FILENAME
+REPORT_PDF_COPY = REPORTS_DELIVERABLES / REPORT_PDF_FILENAME
 
 # --- Negocio ---
 SLA_ENTREGA_DIAS = 15

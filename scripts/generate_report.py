@@ -7,7 +7,8 @@ Uso:
     python scripts/generate_report.py
 
 Salida:
-    reports/deliverables/Informe_Hallazgos_TechLogistics.pdf
+    Informe_Consultoria_TechLogistics_Junta_Directiva_Hallazgos_Estrategicos.pdf
+    (raíz del proyecto; copia en reports/deliverables/)
 """
 
 import io
@@ -28,7 +29,14 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from techlogistics.config import HEALTH_SCORE_POR_DATASET, REPORT_PDF, REPORTS_DELIVERABLES, SLA_ENTREGA_DIAS, ensure_dirs
+from techlogistics.config import (
+    HEALTH_SCORE_POR_DATASET,
+    REPORT_PDF,
+    REPORT_PDF_COPY,
+    REPORTS_DELIVERABLES,
+    SLA_ENTREGA_DIAS,
+    ensure_dirs,
+)
 from techlogistics.pipelines.integration import construir_fuente_unica
 
 plt.rcParams.update({"figure.autolayout": True, "font.size": 9})
@@ -131,6 +139,36 @@ def grafico_q5(df):
     return _figura_a_imagen(fig)
 
 
+def grafico_health_score_resumen():
+    """Barras comparativas de Health Score antes/después (los 3 datasets)."""
+    filas = []
+    for nombre, etiqueta in [
+        ("transacciones", "Transacciones"),
+        ("inventario", "Inventario"),
+        ("feedback", "Feedback"),
+    ]:
+        ruta = HEALTH_SCORE_POR_DATASET.get(nombre)
+        if ruta is not None and ruta.exists():
+            df_h = pd.read_csv(ruta)
+            t = df_h[df_h["metrica"] == "health_score_total"].iloc[0]
+            filas.append({"Dataset": etiqueta, "Antes": t["antes"], "Después": t["despues"]})
+    if not filas:
+        return None
+    df_plot = pd.DataFrame(filas)
+    x = range(len(df_plot))
+    ancho = 0.35
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar([i - ancho / 2 for i in x], df_plot["Antes"], width=ancho, label="Antes", color="#94a3b8")
+    ax.bar([i + ancho / 2 for i in x], df_plot["Después"], width=ancho, label="Después", color="#2563eb")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(df_plot["Dataset"])
+    ax.set_ylabel("Health Score (0-100)")
+    ax.set_title("Calidad de datos: Health Score antes y después de la limpieza")
+    ax.legend()
+    ax.set_ylim(0, 105)
+    return _figura_a_imagen(fig)
+
+
 def calcular_hallazgos(df):
     hallazgos = {}
 
@@ -228,10 +266,20 @@ def _tabla_health_score(nombre_dataset, styles):
 
 
 def construir_informe():
+    """Genera el PDF de consultoría en la raíz del proyecto."""
     ensure_dirs()
+    REPORTS_DELIVERABLES.mkdir(parents=True, exist_ok=True)
+
     print("Construyendo la Fuente Única de Verdad para el informe...")
     df = construir_fuente_unica()
+    if df.empty:
+        raise ValueError("La Fuente Única de Verdad quedó vacía; ejecute primero run_pipeline.py.")
+
     hallazgos = calcular_hallazgos(df)
+    ingreso_total = df["Ingreso_Bruto"].sum()
+    pct_fantasma = df["SKU_Fantasma"].mean() * 100
+    pct_tardias = df["Entrega_Tardia"].mean() * 100
+    nps = df.loc[df["Tiene_Feedback"], "Satisfaccion_NPS"].mean()
 
     styles = getSampleStyleSheet()
     estilo_titulo = ParagraphStyle("TituloInforme", parent=styles["Title"], fontSize=20)
@@ -253,18 +301,41 @@ def construir_informe():
     story.append(Spacer(1, 0.5 * cm))
     story.append(
         Paragraph(
-            "Diagnóstico de invisibilidad operativa entre Inventario, Logística y Feedback, "
-            "y hoja de ruta de recuperación de margen. Challenge 02 — Fundamentos en Ciencia "
-            "de Datos (Maestría), EAFIT 2026-1.",
+            "Diagnóstico de <b>invisibilidad operativa</b> entre Inventario, Logística y Feedback, "
+            "con cinco hallazgos estratégicos y hoja de ruta para recuperar margen y lealtad. "
+            "Challenge 02 — Fundamentos en Ciencia de Datos (Maestría), Universidad EAFIT, 2026-1.",
             estilo_cuerpo,
         )
     )
-    story.append(Spacer(1, 1 * cm))
+    story.append(Spacer(1, 0.4 * cm))
+    story.append(Paragraph("Resumen ejecutivo", estilo_h2))
+    story.append(
+        Paragraph(
+            f"Se integraron <b>{len(df):,}</b> transacciones en una Sola Fuente de Verdad. "
+            f"El ingreso bruto analizado asciende a <b>USD {ingreso_total:,.0f}</b>. "
+            f"<b>{pct_fantasma:.1f}%</b> de las ventas carece de respaldo en inventario (SKU fantasma); "
+            f"<b>{pct_tardias:.1f}%</b> de entregas incumple el SLA de {SLA_ENTREGA_DIAS} días; "
+            f"el NPS promedio donde hay feedback es <b>{nps:.1f}</b>. "
+            "Las gráficas siguientes reproducen los mismos indicadores visualizados en el dashboard Streamlit.",
+            estilo_cuerpo,
+        )
+    )
+    story.append(Spacer(1, 0.8 * cm))
 
-    story.append(Paragraph("Auditoría de Calidad — Health Score Antes vs. Después", estilo_h2))
+    story.append(Paragraph("Auditoría de calidad — Health Score", estilo_h2))
+    fig_hs = grafico_health_score_resumen()
+    if fig_hs is not None:
+        story.append(fig_hs)
     for nombre in ["transacciones", "inventario", "feedback"]:
         story.append(_tabla_health_score(nombre, styles))
         story.append(Spacer(1, 0.3 * cm))
+    story.append(
+        Paragraph(
+            "Metodología: Completitud 40 % + Unicidad 25 % + Consistencia 20 % + Validez 15 %. "
+            "Toda transformación queda registrada en reports/quality/log_limpieza_*.csv.",
+            estilo_cuerpo,
+        )
+    )
     story.append(PageBreak())
 
     h1 = hallazgos["q1"]
@@ -349,23 +420,38 @@ def construir_informe():
         story.append(Paragraph("No hay suficientes datos cruzados de inventario y soporte por bodega.", estilo_cuerpo))
 
     story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph("Recomendaciones generales para la junta", estilo_h2))
     story.append(
         Paragraph(
-            "Recomendación general: priorizar la resolución del SKU fantasma (control de inventario), "
-            "renegociar o cambiar el operador logístico en la zona crítica identificada, y establecer "
-            "un calendario obligatorio de revisión de stock para las bodegas más rezagadas.",
+            "<b>1.</b> Bloquear ventas de SKU no catalogados y auditar altas en inventario. "
+            "<b>2.</b> Renegociar o sustituir operadores logísticos en la zona con peor "
+            "correlación entrega–NPS. <b>3.</b> Establecer conteo cíclico obligatorio en "
+            "bodegas con mayor antigüedad de revisión. <b>4.</b> Recalibrar precios en canal "
+            "Online si concentra márgenes negativos. <b>5.</b> Usar el dashboard DSS para "
+            "monitoreo continuo con trazabilidad de imputaciones.",
             estilo_cuerpo,
         )
     )
 
     doc.build(story)
-    print(f"\nInforme generado: {os.path.normpath(REPORT_PDF)}")
+
+    import shutil
+    shutil.copy2(REPORT_PDF, REPORT_PDF_COPY)
+    print(f"\nInforme generado (raíz): {os.path.normpath(REPORT_PDF)}")
+    print(f"Copia en:              {os.path.normpath(REPORT_PDF_COPY)}")
     return REPORT_PDF
 
 
 if __name__ == "__main__":
     try:
         construir_informe()
-    except (FileNotFoundError, ValueError, PermissionError) as exc:
+    except FileNotFoundError as exc:
+        print(f"\nERROR — archivo no encontrado: {exc}")
+        print("Ejecute primero: python scripts/run_pipeline.py")
+        sys.exit(1)
+    except (ValueError, PermissionError, OSError) as exc:
         print(f"\nERROR: {exc}")
+        sys.exit(1)
+    except Exception as exc:
+        print(f"\nERROR inesperado al generar el PDF: {exc}")
         sys.exit(1)

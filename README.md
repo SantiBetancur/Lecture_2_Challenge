@@ -1,123 +1,201 @@
 # TechLogistics S.A.S. — Data Hub & Sistema de Soporte a la Decisión (DSS)
 
-Challenge 02 — Curso Fundamentos en Ciencia de Datos (Maestría), Universidad EAFIT, 2026-1.
+Challenge 02 — Curso **Fundamentos en Ciencia de Datos** (Maestría), Universidad **EAFIT**, 2026-1.
 
-TechLogistics S.A.S. (ficticio) tiene tres sistemas que no hablan el mismo idioma: ERP de
-Inventarios, Logística y Feedback de clientes. Este proyecto hace la curaduría de los tres
-datasets, los integra en una **Sola Fuente de Verdad**, responde 5 preguntas de alta gerencia
-y genera recomendaciones estratégicas con IA (Groq / Llama 3.3), todo dentro de un dashboard
-en Streamlit.
+TechLogistics S.A.S. (ficticio) opera con tres sistemas desconectados: **Inventario**, **Logística** y **Feedback**. Este repositorio:
+
+1. **Curaduría trazable** de los tres datasets (Health Score, logs de limpieza, decisiones éticas).
+2. **Integración** en una Sola Fuente de Verdad.
+3. **Dashboard Streamlit** con sidebar, pestañas y descargas.
+4. **5 preguntas estratégicas** de alta gerencia con gráficos y conclusiones.
+5. **Módulo IA** (Llama-3 vía Groq) sobre datos filtrados.
+6. **Informe PDF** de consultoría para la junta directiva.
+
+---
+
+## Requisitos
+
+| Requisito | Versión |
+|-----------|---------|
+| Python | 3.10 o superior |
+| pip | reciente |
+| SO | Windows, macOS o Linux |
+
+Opcional: cuenta gratuita en [Groq](https://console.groq.com/) para la pestaña **Recomendaciones IA**.
+
+---
+
+## Instalación (usuario externo)
+
+```bash
+# 1. Clonar o descomprimir el repositorio
+cd Lecture_2_Challenge
+
+# 2. Entorno virtual (recomendado)
+python -m venv .venv
+
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+# 3. Instalar dependencias y paquete local
+pip install -e .
+# Alternativa: pip install -r requirements.txt
+```
+
+---
+
+## Cómo replicar el análisis completo
+
+### Paso 1 — Ejecutar pipelines de limpieza e integración
+
+Genera datasets limpios, Health Score, logs de trazabilidad y la Fuente Única de Verdad.
+
+```bash
+make pipeline
+# equivalente:
+python scripts/run_pipeline.py
+```
+
+Salidas principales:
+
+- `data/interim/*.csv` — datasets limpios  
+- `data/processed/fuente_unica_verdad.csv` — merge estratégico  
+- `reports/quality/health_score_*.csv` — Health Score antes/después  
+- `reports/quality/log_limpieza_*.csv` — cada transformación documentada  
+
+Ejecutar etapas individuales:
+
+```bash
+python scripts/run_pipeline.py --stage inventory transactions feedback integration
+```
+
+### Paso 2 — Levantar el dashboard Streamlit
+
+```bash
+make app
+# equivalente:
+streamlit run app.py
+```
+
+- **Sidebar:** navegación por secciones, filtros (Preguntas Estratégicas / IA), **descargas** (log CSV, trazabilidad TXT, PDF).
+- **Pestañas:** Dashboard (Resumen / Calidad / Datos), Transacciones, Inventario, Feedback, Preguntas Estratégicas, etc.
+- La primera carga ejecuta los pipelines (`@st.cache_data`); las siguientes interacciones son rápidas.
+
+### Paso 3 — Generar el informe PDF para la junta directiva
+
+```bash
+make report
+# equivalente:
+python scripts/generate_report.py
+```
+
+Genera en la **raíz del proyecto**:
+
+`Informe_Consultoria_TechLogistics_Junta_Directiva_Hallazgos_Estrategicos.pdf`
+
+Incluye gráficas alineadas al dashboard, Health Score, las 5 preguntas estratégicas y narrativa ejecutiva. También se copia a `reports/deliverables/`.
+
+### Paso 4 (opcional) — Recomendaciones con IA
+
+1. Obtener API Key en https://console.groq.com/  
+2. Pegarla en el sidebar **IA (Groq · Llama-3)**  
+   - O definir `GROQ_API_KEY` en `.streamlit/secrets.toml`  
+3. Ir a **Recomendaciones IA**, ajustar filtros y generar 3 párrafos en streaming.
+
+---
 
 ## Estructura del repositorio
 
 ```
 ├── app.py                              # Dashboard Streamlit (DSS)
-├── pyproject.toml                      # Paquete Python instalable
-├── Makefile                            # Atajos: make pipeline, make app, make report
+├── Informe_Consultoria_TechLogistics_Junta_Directiva_Hallazgos_Estrategicos.pdf
+├── pyproject.toml
+├── Makefile
 ├── requirements.txt
+├── README.md
 │
 ├── data/
-│   ├── raw/                            # Datos crudos (solo lectura)
-│   ├── interim/                        # Datasets limpios por pipeline
-│   └── processed/                      # Fuente única de verdad
+│   ├── raw/                            # CSV originales (solo lectura)
+│   ├── interim/                        # Datasets limpios (generados)
+│   └── processed/                      # Fuente única de verdad (generada)
 │
-├── src/techlogistics/                  # Paquete principal
-│   ├── config.py                       # Rutas y constantes centralizadas
-│   ├── io.py                           # Carga de CSV
-│   ├── quality/                        # Health Score y LogLimpieza
-│   └── pipelines/                      # Curación e integración
-│       ├── inventory.py
-│       ├── transactions.py
-│       ├── feedback.py
-│       └── integration.py
+├── src/techlogistics/
+│   ├── config.py                       # Rutas centralizadas
+│   ├── quality/                        # Health Score, LogLimpieza
+│   └── pipelines/                      # inventory, transactions, feedback, integration
 │
 ├── scripts/
-│   ├── run_pipeline.py                 # Ejecuta todos los pipelines
-│   └── generate_report.py              # Genera PDF de hallazgos
+│   ├── run_pipeline.py
+│   └── generate_report.py
 │
 ├── reports/
-│   ├── quality/                        # health_score_*.csv, log_limpieza_*.csv
-│   ├── integration/                    # log_integracion.csv
-│   └── deliverables/                   # Informe_Hallazgos_TechLogistics.pdf
+│   ├── quality/                        # health_score_*, log_limpieza_* (generados)
+│   └── deliverables/                   # copia del PDF
 │
 └── docs/
-    ├── limpieza_datasets.md            # Resumen de limpieza por dataset
-    ├── health_score_report.md
-    └── references/                     # Material de referencia del curso
+    ├── limpieza_datasets.md            # Justificación ética columna por columna
+    └── health_score_report.md
 ```
 
-## Instalación
+---
 
-Requiere Python 3.10+.
+## Streamlit — criterios de usabilidad
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate          # Windows (PowerShell/CMD)
-pip install -e .
-# o: pip install -r requirements.txt
-```
+| Elemento | Dónde |
+|----------|--------|
+| `st.sidebar` | Navegación, filtros globales, descargas, API Groq |
+| `st.tabs` | Dashboard principal, auditoría por dataset, análisis por fuente |
+| Descarga log de limpieza | Sidebar **Descargas** + pestaña **Calidad y trazabilidad** |
+| Descarga trazabilidad TXT | Incluye Health Score, nulidad, outliers, anexo `limpieza_datasets.md` |
+| Descarga PDF | Sidebar (si existe; generar con `make report`) |
 
-## Cómo replicar el análisis
+---
 
-1. **Ejecutar los pipelines de curación** (opcional — `app.py` los invoca automáticamente):
+## Trazabilidad y decisión ética (resumen)
 
-   ```bash
-   make pipeline
-   # o: python scripts/run_pipeline.py
-   # o por etapa: python scripts/run_pipeline.py --stage inventory transactions
-   ```
+Documentación completa: `docs/limpieza_datasets.md` y logs CSV.
 
-   Cada pipeline imprime el Health Score antes/después y exporta a `data/` y `reports/`.
+| Decisión | Criterio |
+|----------|----------|
+| **Eliminar** | Solo duplicados reales (500 feedback duplicados) |
+| **Mediana** | Outliers, centinelas (-5, 999), variables asimétricas |
+| **Moda** | Categorías corruptas en bajo % |
+| **Categoría explícita** | Nulos masivos (>15 %): `Sin_Informacion`, `Sin_Respuesta` |
+| **Winsorización IQR** | Costos extremos por categoría (sin borrar SKUs) |
+| **Conservar filas** | Transacciones e inventario: 0 filas eliminadas por limpieza |
 
-2. **Levantar el dashboard:**
+**Health Score (ejemplo):**
 
-   ```bash
-   make app
-   # o: streamlit run app.py
-   ```
+| Dataset | Antes | Después |
+|---------|-------|---------|
+| Inventario | 93.5 | 99.5 |
+| Transacciones | 94.4 | 99.7 |
+| Feedback | 92.4 | 100.0 |
 
-   La primera carga ejecuta los 3 pipelines y construye la Fuente Única de Verdad
-   (`@st.cache_data`, así que las siguientes interacciones son instantáneas).
+---
 
-3. **Generar el PDF de hallazgos:**
+## Buenas prácticas de código
 
-   ```bash
-   make report
-   # o: python scripts/generate_report.py
-   ```
+- **PEP 8:** nombres en `snake_case`, funciones con docstrings, módulos separados por responsabilidad.
+- **Config centralizado:** `src/techlogistics/config.py` (sin rutas hardcodeadas dispersas).
+- **Manejo de excepciones:** pipelines y scripts capturan `FileNotFoundError`, `ValueError`, `PermissionError`; la app muestra mensajes accionables al usuario.
+- **Trazabilidad:** clase `LogLimpieza` registra cada transformación con justificación.
+- **Reproducibilidad:** `make pipeline && make app && make report` desde cero.
 
-   Escribe `reports/deliverables/Informe_Hallazgos_TechLogistics.pdf`.
+---
 
-## Groq API Key (módulo de IA)
+## Solución de problemas
 
-La pestaña **Recomendaciones IA** del dashboard llama al modelo `llama-3.3-70b-versatile`
-de Groq para generar 3 párrafos de recomendación estratégica a partir del resumen
-estadístico del subconjunto filtrado.
+| Problema | Acción |
+|----------|--------|
+| `FileNotFoundError` en pipeline | Verificar `data/raw/*.csv` |
+| Health Score vacío en dashboard | `make pipeline` |
+| PDF no aparece en sidebar | `make report` |
+| Error Groq / IA | Revisar API Key y cuota en console.groq.com |
+| Streamlit lento al inicio | Normal en primera carga (ejecuta pipelines) |
 
-1. Crea una cuenta gratuita en https://console.groq.com/
-2. Genera una API Key en la sección *API Keys*.
-3. Pégala en el campo **Groq API Key** de la barra lateral del dashboard (no se persiste en
-   disco; solo vive en la sesión de Streamlit).
-
-Sin API Key, el resto del dashboard funciona con normalidad — solo esa pestaña queda
-inactiva con un aviso.
-
-## Decisiones de limpieza (resumen)
-
-El detalle línea por línea, con justificación, está en `reports/quality/log_limpieza_*.csv`
-(descargable también desde el dashboard) y en `docs/limpieza_datasets.md`. Las decisiones
-más relevantes:
-
-- **SKU Fantasma** (`integration.py`): 480 de 2,889 SKUs de transacciones
-  (~17%) no existen en el inventario. Se conservan todas las ventas (`merge how='left'`)
-  para no ocultar el fenómeno y se cuantifican aparte en `Ingreso_En_Riesgo` (Pregunta 3).
-- **Centinelas de error**: `Cantidad_Vendida = -5` y `Tiempo_Entrega_Real = 999` son
-  códigos de error del sistema origen, no eventos de negocio.
-- **Duplicados intencionales de Feedback**: 500 `Feedback_ID` repetidos se eliminan
-  (`keep='first'`) para no inflar el NPS agregado.
-- **Nulos de alto porcentaje**: no se imputan con la moda — se marcan como categoría
-  explícita (`Sin_Informacion` / `Sin_Respuesta`).
+---
 
 ## Autor
 
-Santiago Betancur — Maestría en Ciencia de Datos, Universidad EAFIT.
+**Santiago Betancur** — Maestría en Ciencia de Datos, Universidad EAFIT.

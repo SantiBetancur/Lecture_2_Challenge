@@ -52,6 +52,16 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (FileNotFoundError, ValueError, PermissionError) as exc:
+    except FileNotFoundError as exc:
+        print(f"\nERROR — archivo no encontrado: {exc}")
+        print("Verifique que data/raw/ contenga los CSV del reto.")
+        sys.exit(1)
+    except (ValueError, PermissionError, OSError) as exc:
         print(f"\nERROR: {exc}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nPipeline cancelado por el usuario.")
+        sys.exit(130)
+    except Exception as exc:
+        print(f"\nERROR inesperado: {exc}")
         sys.exit(1)
