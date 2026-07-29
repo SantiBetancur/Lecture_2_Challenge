@@ -1,5 +1,22 @@
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
+.env
 .streamlit/secrets.toml
+
+# Datos generados (raw se versiona; interim/processed se regeneran)
+data/interim/
+data/processed/
+
+# Reportes generados (quality e integration se regeneran)
+reports/quality/
+reports/integration/
+reports/deliverables/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

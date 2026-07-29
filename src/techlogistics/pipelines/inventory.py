@@ -6,7 +6,7 @@ Pipeline de auditoría, limpieza y feature engineering del dataset
 
 Challenge 02 - Fundamentos en Ciencia de Datos (Maestría) - EAFIT 2026-1
 
-Salidas generadas en ../data y ../reports:
+Salidas generadas en data/interim y reports/quality:
     - inventario_limpio.csv           Dataset curado
     - log_limpieza_inventario.csv     Trazabilidad de cada transformación
     - health_score_inventario.csv     Health Score antes vs. después
@@ -19,36 +19,20 @@ import sys
 import numpy as np
 import pandas as pd
 
-if __package__ in (None, ""):
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from common import (
-        LogLimpieza,
-        cargar_datos,
-        check_data_quality,
-        comparar_health_scores,
-        imprimir_health_score,
-    )
-else:
-    from .common import (
-        LogLimpieza,
-        cargar_datos,
-        check_data_quality,
-        comparar_health_scores,
-        imprimir_health_score,
-    )
-
-# ---------------------------------------------------------------------------
-# CONFIGURACIÓN
-# ---------------------------------------------------------------------------
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
-REPORTS_DIR = os.path.join(SCRIPT_DIR, "..", "reports")
-
-DATA_PATH = os.path.join(DATA_DIR, "inventario_central_v2.csv")
-OUTPUT_PATH = os.path.join(DATA_DIR, "inventario_limpio.csv")
-LOG_PATH = os.path.join(REPORTS_DIR, "log_limpieza_inventario.csv")
-HEALTH_PATH = os.path.join(REPORTS_DIR, "health_score_inventario.csv")
+from techlogistics.config import (
+    HEALTH_SCORE_INVENTORY,
+    INTERIM_INVENTORY,
+    LOG_LIMPIEZA_INVENTORY,
+    RAW_INVENTORY,
+    ensure_dirs,
+)
+from techlogistics.io import cargar_datos
+from techlogistics.quality import (
+    LogLimpieza,
+    check_data_quality,
+    comparar_health_scores,
+    imprimir_health_score,
+)
 
 # Umbral de costo unitario a partir del cual se considera atípico incluso
 # antes de calcular IQR (evidencia del reto: "desde $0.01 hasta $850k").
@@ -116,7 +100,7 @@ def _reglas_negocio_inventario(df):
 
 
 def _auditar_inventario(df, etiqueta):
-    """Envoltorio de common.check_data_quality con la configuración de este dataset."""
+    """Envoltorio de check_data_quality con la configuración de este dataset."""
     return check_data_quality(
         df,
         etiqueta=etiqueta,
@@ -415,11 +399,11 @@ def ejecutar_pipeline():
     print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
     print("=" * 78)
 
-    os.makedirs(REPORTS_DIR, exist_ok=True)
+    ensure_dirs()
     log = LogLimpieza()
 
     # Fase 0 - Carga y auditoría inicial
-    df_original = cargar_datos(DATA_PATH)
+    df_original = cargar_datos(RAW_INVENTORY)
     salud_antes = _auditar_inventario(df_original, "Antes de la curación")
     imprimir_health_score(salud_antes)
 
@@ -448,16 +432,16 @@ def ejecutar_pipeline():
     print("EXPORTACIÓN DE ARTEFACTOS")
     print("=" * 78)
     try:
-        df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
-        print(f"  Dataset limpio : {os.path.normpath(OUTPUT_PATH)}")
+        df.to_csv(INTERIM_INVENTORY, index=False, encoding="utf-8")
+        print(f"  Dataset limpio : {os.path.normpath(INTERIM_INVENTORY)}")
 
         df_log = log.to_frame()
-        df_log.to_csv(LOG_PATH, index=False, encoding="utf-8")
-        print(f"  Log de limpieza: {os.path.normpath(LOG_PATH)} "
+        df_log.to_csv(LOG_LIMPIEZA_INVENTORY, index=False, encoding="utf-8")
+        print(f"  Log de limpieza: {os.path.normpath(LOG_LIMPIEZA_INVENTORY)} "
               f"({len(df_log)} transformaciones)")
 
-        comparativo.to_csv(HEALTH_PATH, index=False, encoding="utf-8")
-        print(f"  Health Score   : {os.path.normpath(HEALTH_PATH)}")
+        comparativo.to_csv(HEALTH_SCORE_INVENTORY, index=False, encoding="utf-8")
+        print(f"  Health Score   : {os.path.normpath(HEALTH_SCORE_INVENTORY)}")
     except PermissionError:
         raise PermissionError(
             "No se pudo escribir la salida. Cierre los CSV si están abiertos en Excel."

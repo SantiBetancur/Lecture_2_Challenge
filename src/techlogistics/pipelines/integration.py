@@ -1,13 +1,13 @@
 """
-integracion.py
----------------
+integration.py
+--------------
 Fase 2.2 del Challenge 02: unión estratégica de los tres datasets curados
 (transacciones, inventario, feedback) en una Sola Fuente de Verdad, y
 construcción de las variables derivadas que alimentan las 5 preguntas de
 alta gerencia.
 
 Dilema del SKU Fantasma
-------------------------
+-----------------------
 480 de 2,889 SKUs únicos en transacciones (16.6 %) no existen en el maestro
 de inventario. Sin más contexto del ERP no puede distinguirse si son
 productos nuevos aún no catalogados o errores de digitación, así que la
@@ -30,28 +30,16 @@ import sys
 
 import numpy as np
 
-if __package__ in (None, ""):
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from common import LogLimpieza
-    from lg_transactions import procesar_transacciones
-    from inventory import procesar_inventario
-    from feedback import procesar_feedback
-else:
-    from .common import LogLimpieza
-    from .lg_transactions import procesar_transacciones
-    from .inventory import procesar_inventario
-    from .feedback import procesar_feedback
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
-REPORTS_DIR = os.path.join(SCRIPT_DIR, "..", "reports")
-
-OUTPUT_PATH = os.path.join(DATA_DIR, "fuente_unica_verdad.csv")
-LOG_PATH = os.path.join(REPORTS_DIR, "log_integracion.csv")
-
-# SLA de entrega usado como "tiempo prometido" (ya calculado en transacciones
-# como Brecha_SLA); se documenta aquí para que la Pregunta 2 sea legible.
-SLA_ENTREGA_DIAS = 15
+from techlogistics.config import (
+    LOG_INTEGRATION,
+    PROCESSED_MASTER,
+    SLA_ENTREGA_DIAS,
+    ensure_dirs,
+)
+from techlogistics.pipelines.feedback import procesar_feedback
+from techlogistics.pipelines.inventory import procesar_inventario
+from techlogistics.pipelines.transactions import procesar_transacciones
+from techlogistics.quality import LogLimpieza
 
 
 def _renombrar_columnas_compartidas(df, sufijo, columnas=("Registro_Confiable",)):
@@ -95,6 +83,7 @@ def construir_fuente_unica():
     print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
     print("=" * 78)
 
+    ensure_dirs()
     log = LogLimpieza()
 
     df_tx = procesar_transacciones()
@@ -135,11 +124,10 @@ def construir_fuente_unica():
 
     df_maestro = _crear_variables_derivadas(df_maestro, log)
 
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    df_maestro.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
-    log.to_frame().to_csv(LOG_PATH, index=False, encoding="utf-8")
+    df_maestro.to_csv(PROCESSED_MASTER, index=False, encoding="utf-8")
+    log.to_frame().to_csv(LOG_INTEGRATION, index=False, encoding="utf-8")
 
-    print(f"\n  Fuente única de verdad : {os.path.normpath(OUTPUT_PATH)}")
+    print(f"\n  Fuente única de verdad : {os.path.normpath(PROCESSED_MASTER)}")
     print(f"  Filas x columnas       : {df_maestro.shape[0]:,} x {df_maestro.shape[1]}")
     print(f"  SKU fantasma           : {n_fantasma:,} ({n_fantasma / n_tx * 100:.1f} %)")
     print(f"  Con feedback           : {n_con_feedback:,} ({n_con_feedback / n_tx * 100:.1f} %)")

@@ -11,25 +11,29 @@ Autor: Santiago Betancur
 Challenge 02 - Fundamentos en Ciencia de Datos (Maestría) - EAFIT 2026-1
 """
 
-import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Agregar ruta de processing
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROCESSING_DIR = os.path.join(SCRIPT_DIR, "processing")
-REPORTS_DIR = os.path.join(SCRIPT_DIR, "reports")
-sys.path.insert(0, PROCESSING_DIR)
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "src"))
 
-# Importar funciones de processing
-from lg_transactions import procesar_transacciones
-from inventory import procesar_inventario
-from feedback import procesar_feedback
-from integracion import construir_fuente_unica, SLA_ENTREGA_DIAS
+from techlogistics.config import (
+    HEALTH_SCORE_POR_DATASET,
+    LOG_LIMPIEZA_POR_DATASET,
+    RAW_CSV_POR_DATASET,
+    SLA_ENTREGA_DIAS,
+)
+from techlogistics.pipelines import (
+    construir_fuente_unica,
+    procesar_feedback,
+    procesar_inventario,
+    procesar_transacciones,
+)
 
 
 # ============================================================================
@@ -113,28 +117,18 @@ def obtener_columnas_categoricas(df):
 
 
 def leer_health_score(nombre_dataset):
-    """Lee el comparativo de Health Score ya exportado por processing/*.py."""
-    ruta = os.path.join(REPORTS_DIR, f"health_score_{nombre_dataset}.csv")
-    if os.path.exists(ruta):
+    """Lee el comparativo de Health Score ya exportado por los pipelines."""
+    ruta = HEALTH_SCORE_POR_DATASET.get(nombre_dataset)
+    if ruta is not None and ruta.exists():
         return pd.read_csv(ruta)
     return None
-
-
-RAW_CSV_POR_DATASET = {
-    "transacciones": "transacciones_logistica_v2.csv",
-    "inventario": "inventario_central_v2.csv",
-    "feedback": "feedback_clientes_v2.csv",
-}
 
 
 @st.cache_data(show_spinner=False)
 def resumen_nulidad_original(nombre_dataset):
     """% de nulidad por columna del CSV crudo, tal como exige la Fase 1 del reto."""
-    archivo = RAW_CSV_POR_DATASET.get(nombre_dataset)
-    if archivo is None:
-        return None
-    ruta = os.path.join(SCRIPT_DIR, "data", archivo)
-    if not os.path.exists(ruta):
+    ruta = RAW_CSV_POR_DATASET.get(nombre_dataset)
+    if ruta is None or not ruta.exists():
         return None
     df_raw = pd.read_csv(ruta)
     nulidad = (df_raw.isna().sum() / len(df_raw) * 100).round(2)
@@ -146,15 +140,9 @@ def resumen_nulidad_original(nombre_dataset):
 
 def construir_reporte_limpieza_consolidado():
     """Concatena los 3 logs de limpieza en un único CSV descargable."""
-    patrones = {
-        "transacciones": "log_limpieza_transacciones.csv",
-        "inventario": "log_limpieza_inventario.csv",
-        "feedback": "log_limpieza_feedback.csv",
-    }
     partes = []
-    for dataset, archivo in patrones.items():
-        ruta = os.path.join(REPORTS_DIR, archivo)
-        if os.path.exists(ruta):
+    for dataset, ruta in LOG_LIMPIEZA_POR_DATASET.items():
+        if ruta.exists():
             df_log = pd.read_csv(ruta)
             df_log.insert(0, "dataset", dataset)
             partes.append(df_log)
@@ -400,7 +388,7 @@ if pagina == "📈 Dashboard Principal":
     # -------------------------------------------------------------
     st.subheader("🩺 Auditoría de Calidad - Health Score Antes vs. Después")
     st.caption(
-        "Cada pipeline (`processing/*.py`) documenta su propio Health Score "
+        "Cada pipeline (`src/techlogistics/pipelines/`) documenta su propio Health Score "
         "compuesto (Completitud 40% + Unicidad 25% + Consistencia 20% + Validez 15%)."
     )
 
@@ -426,7 +414,7 @@ if pagina == "📈 Dashboard Principal":
                         else:
                             st.caption("Sin columnas con valores nulos en el dataset crudo.")
             else:
-                st.info("Ejecuta processing/*.py para generar el Health Score.")
+                st.info("Ejecuta `python scripts/run_pipeline.py` para generar el Health Score.")
 
     st.divider()
     st.subheader("📥 Reporte de Limpieza Descargable")

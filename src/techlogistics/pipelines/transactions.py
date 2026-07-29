@@ -1,13 +1,13 @@
 """
-lg_transactions.py
-------------------
+transactions.py
+---------------
 Pipeline de auditoría, limpieza y feature engineering del dataset
 `transacciones_logistica_v2.csv`.
 
 Challenge 02 - Fundamentos en Ciencia de Datos (Maestría) - EAFIT 2026-1
 Autor: Santiago Betancur
 
-Salidas generadas en ../data y ../reports:
+Salidas generadas en data/interim y reports/quality:
     - transacciones_logistica_limpio.csv   Dataset curado
     - log_limpieza_transacciones.csv       Trazabilidad de cada transformación
     - health_score_transacciones.csv       Health Score antes vs. después
@@ -19,36 +19,21 @@ import sys
 import numpy as np
 import pandas as pd
 
-if __package__ in (None, ""):
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from common import (
-        LogLimpieza,
-        cargar_datos,
-        check_data_quality,
-        comparar_health_scores,
-        imprimir_health_score,
-    )
-else:
-    from .common import (
-        LogLimpieza,
-        cargar_datos,
-        check_data_quality,
-        comparar_health_scores,
-        imprimir_health_score,
-    )
-
-# ---------------------------------------------------------------------------
-# CONFIGURACIÓN
-# ---------------------------------------------------------------------------
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
-REPORTS_DIR = os.path.join(SCRIPT_DIR, "..", "reports")
-
-DATA_PATH = os.path.join(DATA_DIR, "transacciones_logistica_v2.csv")
-OUTPUT_PATH = os.path.join(DATA_DIR, "transacciones_logistica_limpio.csv")
-LOG_PATH = os.path.join(REPORTS_DIR, "log_limpieza_transacciones.csv")
-HEALTH_PATH = os.path.join(REPORTS_DIR, "health_score_transacciones.csv")
+from techlogistics.config import (
+    HEALTH_SCORE_TRANSACTIONS,
+    INTERIM_TRANSACTIONS,
+    LOG_LIMPIEZA_TRANSACTIONS,
+    RAW_TRANSACTIONS,
+    SLA_ENTREGA_DIAS,
+    ensure_dirs,
+)
+from techlogistics.io import cargar_datos
+from techlogistics.quality import (
+    LogLimpieza,
+    check_data_quality,
+    comparar_health_scores,
+    imprimir_health_score,
+)
 
 FORMATO_FECHA = "%d/%m/%Y"
 
@@ -83,16 +68,12 @@ ESTADO_DESCONOCIDO = "Sin_Informacion"
 # ---------------------------------------------------------------------------
 # FASE 1: HEALTH SCORE - reglas de negocio específicas de transacciones
 # ---------------------------------------------------------------------------
-# NOTA: LogLimpieza, cargar_datos, check_data_quality, imprimir_health_score y
-# comparar_health_scores viven en common.py (compartidos con inventory.py y
-# feedback.py). Aquí solo se define qué cuenta como "regla de negocio violada"
-# para ESTE dataset.
 
 def _reglas_negocio_transacciones(df):
     """
     Valida las reglas de negocio propias de transacciones logísticas.
 
-    Retorna (dict_validaciones, mask_invalidos) para que common.check_data_quality
+    Retorna (dict_validaciones, mask_invalidos) para que check_data_quality
     las incorpore al score de Validez.
     """
     n = len(df)
@@ -144,7 +125,7 @@ def _reglas_negocio_transacciones(df):
 
 
 def _auditar_transacciones(df, etiqueta):
-    """Envoltorio de common.check_data_quality con la configuración de este dataset."""
+    """Envoltorio de check_data_quality con la configuración de este dataset."""
     return check_data_quality(
         df,
         etiqueta=etiqueta,
@@ -424,11 +405,10 @@ def crear_variables_derivadas(df, log):
     )
 
     # 4. Semáforo de cumplimiento logístico (SLA de 15 días).
-    sla = 15
-    df["Entrega_Tardia"] = df["Tiempo_Entrega_Real"] > sla
-    df["Brecha_SLA"] = df["Tiempo_Entrega_Real"] - sla
+    df["Entrega_Tardia"] = df["Tiempo_Entrega_Real"] > SLA_ENTREGA_DIAS
+    df["Brecha_SLA"] = df["Tiempo_Entrega_Real"] - SLA_ENTREGA_DIAS
     log.registrar(
-        "Feature Eng.", "Entrega_Tardia / Brecha_SLA", f"vs. SLA de {sla} días",
+        "Feature Eng.", "Entrega_Tardia / Brecha_SLA", f"vs. SLA de {SLA_ENTREGA_DIAS} días",
         "Convierte el tiempo en un KPI accionable para la Pregunta 2.",
         int(df["Entrega_Tardia"].sum()),
     )
@@ -475,10 +455,11 @@ def ejecutar_pipeline():
     print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
     print("=" * 78)
 
+    ensure_dirs()
     log = LogLimpieza()
 
     # Fase 0 - Carga y auditoría inicial
-    df_original = cargar_datos(DATA_PATH)
+    df_original = cargar_datos(RAW_TRANSACTIONS)
     salud_antes = _auditar_transacciones(df_original, "Antes de la curación")
     imprimir_health_score(salud_antes)
 
@@ -510,17 +491,16 @@ def ejecutar_pipeline():
     print(f"\n{'=' * 78}")
     print("EXPORTACIÓN DE ARTEFACTOS")
     print("=" * 78)
-    os.makedirs(REPORTS_DIR, exist_ok=True)
     try:
-        df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
-        print(f"  Dataset limpio : {os.path.normpath(OUTPUT_PATH)}")
+        df.to_csv(INTERIM_TRANSACTIONS, index=False, encoding="utf-8")
+        print(f"  Dataset limpio : {os.path.normpath(INTERIM_TRANSACTIONS)}")
 
-        df_log.to_csv(LOG_PATH, index=False, encoding="utf-8")
-        print(f"  Log de limpieza: {os.path.normpath(LOG_PATH)} "
+        df_log.to_csv(LOG_LIMPIEZA_TRANSACTIONS, index=False, encoding="utf-8")
+        print(f"  Log de limpieza: {os.path.normpath(LOG_LIMPIEZA_TRANSACTIONS)} "
               f"({len(df_log)} transformaciones)")
 
-        comparativo.to_csv(HEALTH_PATH, index=False, encoding="utf-8")
-        print(f"  Health Score   : {os.path.normpath(HEALTH_PATH)}")
+        comparativo.to_csv(HEALTH_SCORE_TRANSACTIONS, index=False, encoding="utf-8")
+        print(f"  Health Score   : {os.path.normpath(HEALTH_SCORE_TRANSACTIONS)}")
     except PermissionError:
         raise PermissionError(
             "No se pudo escribir la salida. Cierre los CSV si están abiertos en Excel."
@@ -560,4 +540,3 @@ if __name__ == "__main__":
           f"({df_limpio['Registro_Confiable'].mean() * 100:.1f} %)")
     print(f"  Ingreso bruto total   : USD {df_limpio['Ingreso_Bruto'].sum():,.2f}")
     print("\n  Listo para el merge con inventario y feedback vía 'SKU_ID'.")
-

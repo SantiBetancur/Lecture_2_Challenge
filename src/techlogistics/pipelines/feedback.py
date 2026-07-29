@@ -6,7 +6,7 @@ Pipeline de auditoría, limpieza y feature engineering del dataset
 
 Challenge 02 - Fundamentos en Ciencia de Datos (Maestría) - EAFIT 2026-1
 
-Salidas generadas en ../data y ../reports:
+Salidas generadas en data/interim y reports/quality:
     - feedback_limpio.csv           Dataset curado
     - log_limpieza_feedback.csv     Trazabilidad de cada transformación
     - health_score_feedback.csv     Health Score antes vs. después
@@ -18,36 +18,20 @@ import sys
 import numpy as np
 import pandas as pd
 
-if __package__ in (None, ""):
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from common import (
-        LogLimpieza,
-        cargar_datos,
-        check_data_quality,
-        comparar_health_scores,
-        imprimir_health_score,
-    )
-else:
-    from .common import (
-        LogLimpieza,
-        cargar_datos,
-        check_data_quality,
-        comparar_health_scores,
-        imprimir_health_score,
-    )
-
-# ---------------------------------------------------------------------------
-# CONFIGURACIÓN
-# ---------------------------------------------------------------------------
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "..", "data")
-REPORTS_DIR = os.path.join(SCRIPT_DIR, "..", "reports")
-
-DATA_PATH = os.path.join(DATA_DIR, "feedback_clientes_v2.csv")
-OUTPUT_PATH = os.path.join(DATA_DIR, "feedback_limpio.csv")
-LOG_PATH = os.path.join(REPORTS_DIR, "log_limpieza_feedback.csv")
-HEALTH_PATH = os.path.join(REPORTS_DIR, "health_score_feedback.csv")
+from techlogistics.config import (
+    HEALTH_SCORE_FEEDBACK,
+    INTERIM_FEEDBACK,
+    LOG_LIMPIEZA_FEEDBACK,
+    RAW_FEEDBACK,
+    ensure_dirs,
+)
+from techlogistics.io import cargar_datos
+from techlogistics.quality import (
+    LogLimpieza,
+    check_data_quality,
+    comparar_health_scores,
+    imprimir_health_score,
+)
 
 RATING_MIN, RATING_MAX = 1, 5
 EDAD_MAXIMA_PLAUSIBLE = 100
@@ -113,7 +97,7 @@ def _reglas_negocio_feedback(df):
 
 
 def _auditar_feedback(df, etiqueta):
-    """Envoltorio de common.check_data_quality con la configuración de este dataset."""
+    """Envoltorio de check_data_quality con la configuración de este dataset."""
     return check_data_quality(
         df,
         etiqueta=etiqueta,
@@ -323,11 +307,11 @@ def ejecutar_pipeline():
     print("Challenge 02 | Fundamentos en Ciencia de Datos | EAFIT 2026-1")
     print("=" * 78)
 
-    os.makedirs(REPORTS_DIR, exist_ok=True)
+    ensure_dirs()
     log = LogLimpieza()
 
     # Fase 0 - Carga y auditoría inicial
-    df_original = cargar_datos(DATA_PATH)
+    df_original = cargar_datos(RAW_FEEDBACK)
     salud_antes = _auditar_feedback(df_original, "Antes de la curación")
     imprimir_health_score(salud_antes)
 
@@ -354,16 +338,16 @@ def ejecutar_pipeline():
     print("EXPORTACIÓN DE ARTEFACTOS")
     print("=" * 78)
     try:
-        df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8")
-        print(f"  Dataset limpio : {os.path.normpath(OUTPUT_PATH)}")
+        df.to_csv(INTERIM_FEEDBACK, index=False, encoding="utf-8")
+        print(f"  Dataset limpio : {os.path.normpath(INTERIM_FEEDBACK)}")
 
         df_log = log.to_frame()
-        df_log.to_csv(LOG_PATH, index=False, encoding="utf-8")
-        print(f"  Log de limpieza: {os.path.normpath(LOG_PATH)} "
+        df_log.to_csv(LOG_LIMPIEZA_FEEDBACK, index=False, encoding="utf-8")
+        print(f"  Log de limpieza: {os.path.normpath(LOG_LIMPIEZA_FEEDBACK)} "
               f"({len(df_log)} transformaciones)")
 
-        comparativo.to_csv(HEALTH_PATH, index=False, encoding="utf-8")
-        print(f"  Health Score   : {os.path.normpath(HEALTH_PATH)}")
+        comparativo.to_csv(HEALTH_SCORE_FEEDBACK, index=False, encoding="utf-8")
+        print(f"  Health Score   : {os.path.normpath(HEALTH_SCORE_FEEDBACK)}")
     except PermissionError:
         raise PermissionError(
             "No se pudo escribir la salida. Cierre los CSV si están abiertos en Excel."

@@ -1,81 +1,8 @@
-"""
-common.py
----------
-Infraestructura compartida de auditoría, trazabilidad y Health Score para
-los tres pipelines de curación del Challenge 02 (transacciones, inventario,
-feedback).
-
-Extraído de lg_transactions.py para que los tres datasets se auditen con la
-misma vara: mismas ponderaciones de Health Score, mismo formato de log de
-limpieza y el mismo manejo de errores de carga.
-
-Challenge 02 - Fundamentos en Ciencia de Datos (Maestría) - EAFIT 2026-1
-"""
-
-import os
+"""Health Score compuesto y reportes de calidad de datos."""
 
 import numpy as np
 import pandas as pd
 
-
-# ---------------------------------------------------------------------------
-# SISTEMA DE TRAZABILIDAD
-# ---------------------------------------------------------------------------
-
-class LogLimpieza:
-    """Acumula cada transformación aplicada para exportarla como evidencia."""
-
-    def __init__(self):
-        self.entradas = []
-        self._paso = 0
-
-    def registrar(self, etapa, columna, accion, justificacion, afectados):
-        self._paso += 1
-        self.entradas.append(
-            {
-                "paso": self._paso,
-                "etapa": etapa,
-                "columna": columna,
-                "accion": accion,
-                "justificacion": justificacion,
-                "registros_afectados": int(afectados),
-            }
-        )
-        print(f"  [{self._paso:02d}] {columna:<22} {accion:<38} -> {afectados:>6} reg.")
-
-    def to_frame(self):
-        return pd.DataFrame(self.entradas)
-
-
-# ---------------------------------------------------------------------------
-# CARGA
-# ---------------------------------------------------------------------------
-
-def cargar_datos(ruta):
-    """Carga un dataset crudo con manejo explícito de fallos de E/S."""
-    print(f"\nCargando datos desde: {os.path.normpath(ruta)}")
-    try:
-        df = pd.read_csv(ruta, encoding="utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"No se encontró el dataset en '{ruta}'. "
-            "Verifique que el CSV esté en la carpeta ../data/."
-        )
-    except UnicodeDecodeError:
-        print("  Advertencia: fallo UTF-8, reintentando con latin-1.")
-        df = pd.read_csv(ruta, encoding="latin-1")
-    except pd.errors.EmptyDataError:
-        raise ValueError("El archivo existe pero está vacío o corrupto.")
-    except pd.errors.ParserError as exc:
-        raise ValueError(f"El CSV está malformado y no pudo parsearse: {exc}")
-
-    print(f"  Cargados {len(df):,} registros x {len(df.columns)} columnas")
-    return df
-
-
-# ---------------------------------------------------------------------------
-# HEALTH SCORE
-# ---------------------------------------------------------------------------
 
 def check_data_quality(
     df,
@@ -94,25 +21,6 @@ def check_data_quality(
         Consistencia   20 %   - ausencia de variantes textuales del mismo valor
         Validez        15 %   - ausencia de outliers (IQR) y violaciones de
                                  reglas de negocio
-
-    Parámetros
-    ----------
-    id_col : str, opcional
-        Columna que identifica de forma única un registro de negocio
-        (ej. Transaccion_ID, SKU_ID, Feedback_ID). Si se repite, cuenta
-        como duplicado aunque el resto de la fila difiera.
-    excluir_outliers : set, opcional
-        Columnas numéricas a excluir del análisis de outliers (ej. años,
-        códigos que no son magnitudes continuas).
-    mapeos_categoricos : dict, opcional
-        {columna: {valor_normalizado: canónico}} para detectar variantes
-        SEMÁNTICAS (no solo tipográficas) de una misma categoría, como
-        'BOG' y 'Bogotá'. Sin esto el score de consistencia da falsos 100 %.
-    reglas_negocio : callable, opcional
-        Función `f(df) -> (dict_validaciones, mask_invalidos: pd.Series)`
-        con las reglas de negocio específicas del dataset (valores
-        imposibles, centinelas, etc.). Si no se provee, la validez solo
-        depende de los outliers estadísticos.
     """
     excluir_outliers = excluir_outliers or set()
     mapeos_categoricos = mapeos_categoricos or {}
@@ -131,7 +39,6 @@ def check_data_quality(
     if n == 0:
         raise ValueError("No se puede evaluar la calidad de un DataFrame vacío.")
 
-    # --- Unicidad -------------------------------------------------------
     dup_totales = int(df.duplicated().sum())
     if id_col and id_col in df.columns:
         dup_id = int(df.duplicated(subset=[id_col]).sum())
@@ -145,12 +52,10 @@ def check_data_quality(
         "porcentaje": round(pct_duplicados, 2),
     }
 
-    # --- Completitud ------------------------------------------------------
     nulos_pct = (df.isna().sum() / n * 100).round(2)
     calidad["nulos"] = nulos_pct.to_dict()
     completitud = 100 - nulos_pct.mean()
 
-    # --- Consistencia textual ----------------------------------------------
     inconsistencias = {}
     for col in df.select_dtypes(include=["object", "string"]).columns:
         serie = df[col].dropna().astype(str)
@@ -174,7 +79,6 @@ def check_data_quality(
         }
     calidad["inconsistencias"] = inconsistencias
 
-    # --- Validez: outliers por IQR -----------------------------------------
     for col in df.select_dtypes(include=[np.number]).columns:
         if col in excluir_outliers:
             continue
@@ -193,7 +97,6 @@ def check_data_quality(
             "rango_valido": f"[{round(low, 2)}, {round(high, 2)}]",
         }
 
-    # --- Validaciones de reglas de negocio ---------------------------------
     if reglas_negocio is not None:
         val, mask_invalidos = reglas_negocio(df)
     else:
@@ -206,7 +109,6 @@ def check_data_quality(
     }
     calidad["validaciones"] = val
 
-    # --- Score compuesto ----------------------------------------------------
     score_completitud = completitud
     score_unicidad = max(0, 100 - pct_duplicados * 2)
     score_consistencia = 100 - (
@@ -214,9 +116,6 @@ def check_data_quality(
         / max(len(inconsistencias), 1)
     )
 
-    # La validez pesa dos señales: dispersión estadística (outliers IQR) y
-    # violación de reglas de negocio. Un centinela válido para el IQR pero
-    # imposible para el negocio no se vería reflejado sin el segundo término.
     pct_outliers = (
         sum(v["porcentaje"] for v in calidad["outliers"].values())
         / max(len(calidad["outliers"]), 1)
@@ -249,7 +148,6 @@ def check_data_quality(
 
 
 def _clasificar_health_score(score):
-    """Traduce el score numérico a una categoría legible para la junta."""
     if score >= 90:
         return "Excelente"
     if score >= 80:
@@ -260,10 +158,6 @@ def _clasificar_health_score(score):
         return "Aceptable"
     return "Requiere Mejora"
 
-
-# ---------------------------------------------------------------------------
-# REPORTES
-# ---------------------------------------------------------------------------
 
 def imprimir_health_score(calidad):
     """Muestra en consola el detalle de un Health Score."""
