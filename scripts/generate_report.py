@@ -363,8 +363,7 @@ def construir_informe():
             "tres sistemas que hoy operan de forma aislada y le están costando a la compañía margen, "
             "tiempo de respuesta y confianza del cliente. Este informe presenta cinco hallazgos "
             "estratégicos, cuantificados en impacto financiero, y una hoja de ruta accionable para que "
-            "la Junta recupere el control. Challenge 02 — Fundamentos en Ciencia de Datos (Maestría), "
-            "Universidad EAFIT, 2026-1.",
+            "la Junta recupere el control.",
             estilo_cuerpo,
         )
     )
