@@ -27,7 +27,15 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Image,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from techlogistics.config import (
     HEALTH_SCORE_POR_DATASET,
@@ -66,7 +74,11 @@ def grafico_q1(df):
 
 def grafico_q2(df):
     df_fb = df[df["Tiene_Feedback"]].copy()
-    por_bodega = df_fb.groupby("Bodega_Origen")["Entrega_Tardia"].mean().sort_values(ascending=False)
+    por_bodega = (
+        df_fb.groupby("Bodega_Origen")["Entrega_Tardia"]
+        .mean()
+        .sort_values(ascending=False)
+    )
 
     fig, ax = plt.subplots(figsize=(8, 4))
     (por_bodega * 100).plot(kind="barh", ax=ax, color="darkorange")
@@ -92,7 +104,10 @@ def grafico_q4(df):
     resumen_cat = (
         df.dropna(subset=["Categoria"])
         .groupby("Categoria")
-        .agg(Ratio_Reorden=("Ratio_Stock_Reorden", "mean"), NPS=("Satisfaccion_NPS", "mean"))
+        .agg(
+            Ratio_Reorden=("Ratio_Stock_Reorden", "mean"),
+            NPS=("Satisfaccion_NPS", "mean"),
+        )
         .reset_index()
     )
 
@@ -116,15 +131,25 @@ def grafico_q4(df):
 
 def grafico_q5(df):
     df_fb = df[df["Tiene_Feedback"]]
-    resumen = pd.DataFrame(
-        {
-            "Antiguedad": df.groupby("Bodega_Origen")["Antiguedad_Revision_Dias"].mean(),
-            "Tasa_Soporte": df_fb.groupby("Bodega_Origen")["Ticket_Soporte_Abierto"].mean(),
-        }
-    ).dropna().reset_index()
+    resumen = (
+        pd.DataFrame(
+            {
+                "Antiguedad": df.groupby("Bodega_Origen")[
+                    "Antiguedad_Revision_Dias"
+                ].mean(),
+                "Tasa_Soporte": df_fb.groupby("Bodega_Origen")[
+                    "Ticket_Soporte_Abierto"
+                ].mean(),
+            }
+        )
+        .dropna()
+        .reset_index()
+    )
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.scatter(resumen["Antiguedad"], resumen["Tasa_Soporte"] * 100, s=120, color="crimson")
+    ax.scatter(
+        resumen["Antiguedad"], resumen["Tasa_Soporte"] * 100, s=120, color="crimson"
+    )
     for _, fila in resumen.iterrows():
         ax.annotate(
             fila["Bodega_Origen"],
@@ -151,15 +176,29 @@ def grafico_health_score_resumen():
         if ruta is not None and ruta.exists():
             df_h = pd.read_csv(ruta)
             t = df_h[df_h["metrica"] == "health_score_total"].iloc[0]
-            filas.append({"Dataset": etiqueta, "Antes": t["antes"], "Después": t["despues"]})
+            filas.append(
+                {"Dataset": etiqueta, "Antes": t["antes"], "Después": t["despues"]}
+            )
     if not filas:
         return None
     df_plot = pd.DataFrame(filas)
     x = range(len(df_plot))
     ancho = 0.35
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.bar([i - ancho / 2 for i in x], df_plot["Antes"], width=ancho, label="Antes", color="#94a3b8")
-    ax.bar([i + ancho / 2 for i in x], df_plot["Después"], width=ancho, label="Después", color="#2563eb")
+    ax.bar(
+        [i - ancho / 2 for i in x],
+        df_plot["Antes"],
+        width=ancho,
+        label="Antes",
+        color="#94a3b8",
+    )
+    ax.bar(
+        [i + ancho / 2 for i in x],
+        df_plot["Después"],
+        width=ancho,
+        label="Después",
+        color="#2563eb",
+    )
     ax.set_xticks(list(x))
     ax.set_xticklabels(df_plot["Dataset"])
     ax.set_ylabel("Health Score (0-100)")
@@ -173,7 +212,9 @@ def calcular_hallazgos(df):
     hallazgos = {}
 
     df_neg = df[df["Margen_Utilidad"] < 0]
-    pct_online_neg = (df_neg["Canal_Venta"] == "Online").mean() * 100 if not df_neg.empty else 0
+    pct_online_neg = (
+        (df_neg["Canal_Venta"] == "Online").mean() * 100 if not df_neg.empty else 0
+    )
     pct_online_base = (df["Canal_Venta"] == "Online").mean() * 100
     hallazgos["q1"] = dict(
         n_sku=df_neg["SKU_ID"].nunique(),
@@ -214,15 +255,22 @@ def calcular_hallazgos(df):
     mediana_stock = resumen_cat["Ratio_Reorden"].median()
     mediana_nps = resumen_cat["NPS"].median()
     paradoja = resumen_cat[
-        (resumen_cat["Ratio_Reorden"] >= mediana_stock) & (resumen_cat["NPS"] < mediana_nps)
+        (resumen_cat["Ratio_Reorden"] >= mediana_stock)
+        & (resumen_cat["NPS"] < mediana_nps)
     ]
-    hallazgos["q4"] = dict(categorias=paradoja["Categoria"].tolist() if not paradoja.empty else [])
+    hallazgos["q4"] = dict(
+        categorias=paradoja["Categoria"].tolist() if not paradoja.empty else []
+    )
 
     antiguedad_bodega = df.groupby("Bodega_Origen")["Antiguedad_Revision_Dias"].mean()
     soporte_bodega = df_fb.groupby("Bodega_Origen")["Ticket_Soporte_Abierto"].mean()
-    resumen_bodega = pd.DataFrame({"Antiguedad": antiguedad_bodega, "Soporte": soporte_bodega}).dropna()
+    resumen_bodega = pd.DataFrame(
+        {"Antiguedad": antiguedad_bodega, "Soporte": soporte_bodega}
+    ).dropna()
     if not resumen_bodega.empty:
-        peor_bodega = resumen_bodega.sort_values(["Antiguedad", "Soporte"], ascending=False).iloc[0]
+        peor_bodega = resumen_bodega.sort_values(
+            ["Antiguedad", "Soporte"], ascending=False
+        ).iloc[0]
         hallazgos["q5"] = dict(
             bodega=peor_bodega.name,
             antiguedad=peor_bodega["Antiguedad"],
@@ -237,7 +285,9 @@ def calcular_hallazgos(df):
 def _tabla_health_score(nombre_dataset, styles):
     ruta = HEALTH_SCORE_POR_DATASET.get(nombre_dataset)
     if ruta is None or not ruta.exists():
-        return Paragraph(f"(No se encontró health_score_{nombre_dataset}.csv)", styles["Normal"])
+        return Paragraph(
+            f"(No se encontró health_score_{nombre_dataset}.csv)", styles["Normal"]
+        )
 
     df_health = pd.read_csv(ruta)
     fila = df_health[df_health["metrica"] == "health_score_total"].iloc[0]
@@ -273,7 +323,9 @@ def construir_informe():
     print("Construyendo la Fuente Única de Verdad para el informe...")
     df = construir_fuente_unica()
     if df.empty:
-        raise ValueError("La Fuente Única de Verdad quedó vacía; ejecute primero run_pipeline.py.")
+        raise ValueError(
+            "La Fuente Única de Verdad quedó vacía; ejecute primero run_pipeline.py."
+        )
 
     hallazgos = calcular_hallazgos(df)
     ingreso_total = df["Ingreso_Bruto"].sum()
@@ -284,7 +336,9 @@ def construir_informe():
     styles = getSampleStyleSheet()
     estilo_titulo = ParagraphStyle("TituloInforme", parent=styles["Title"], fontSize=20)
     estilo_h2 = ParagraphStyle("H2Informe", parent=styles["Heading2"], spaceBefore=14)
-    estilo_cuerpo = ParagraphStyle("CuerpoInforme", parent=styles["BodyText"], spaceAfter=10, leading=15)
+    estilo_cuerpo = ParagraphStyle(
+        "CuerpoInforme", parent=styles["BodyText"], spaceAfter=10, leading=15
+    )
 
     doc = SimpleDocTemplate(
         str(REPORT_PDF),
@@ -297,13 +351,20 @@ def construir_informe():
     story = []
 
     story.append(Paragraph("TechLogistics S.A.S.", estilo_titulo))
-    story.append(Paragraph("Informe de Consultoría de Datos — Junta Directiva", styles["Heading2"]))
+    story.append(
+        Paragraph(
+            "Informe de Consultoría de Datos — Junta Directiva", styles["Heading2"]
+        )
+    )
     story.append(Spacer(1, 0.5 * cm))
     story.append(
         Paragraph(
-            "Diagnóstico de <b>invisibilidad operativa</b> entre Inventario, Logística y Feedback, "
-            "con cinco hallazgos estratégicos y hoja de ruta para recuperar margen y lealtad. "
-            "Challenge 02 — Fundamentos en Ciencia de Datos (Maestría), Universidad EAFIT, 2026-1.",
+            "Diagnóstico de <b>invisibilidad operativa</b> entre Inventario, Logística y Feedback: "
+            "tres sistemas que hoy operan de forma aislada y le están costando a la compañía margen, "
+            "tiempo de respuesta y confianza del cliente. Este informe presenta cinco hallazgos "
+            "estratégicos, cuantificados en impacto financiero, y una hoja de ruta accionable para que "
+            "la Junta recupere el control. Challenge 02 — Fundamentos en Ciencia de Datos (Maestría), "
+            "Universidad EAFIT, 2026-1.",
             estilo_cuerpo,
         )
     )
@@ -311,12 +372,17 @@ def construir_informe():
     story.append(Paragraph("Resumen ejecutivo", estilo_h2))
     story.append(
         Paragraph(
-            f"Se integraron <b>{len(df):,}</b> transacciones en una Sola Fuente de Verdad. "
-            f"El ingreso bruto analizado asciende a <b>USD {ingreso_total:,.0f}</b>. "
-            f"<b>{pct_fantasma:.1f}%</b> de las ventas carece de respaldo en inventario (SKU fantasma); "
-            f"<b>{pct_tardias:.1f}%</b> de entregas incumple el SLA de {SLA_ENTREGA_DIAS} días; "
-            f"el NPS promedio donde hay feedback es <b>{nps:.1f}</b>. "
-            "Las gráficas siguientes reproducen los mismos indicadores visualizados en el dashboard Streamlit.",
+            f"Se integraron <b>{len(df):,}</b> transacciones en una Sola Fuente de Verdad, cerrando por "
+            "primera vez la brecha entre lo que la compañía vende, lo que tiene en inventario y lo que "
+            "sus clientes realmente sienten. El diagnóstico es claro: TechLogistics opera con "
+            "visibilidad fragmentada, y esa fragmentación tiene precio. "
+            f"Sobre un ingreso bruto de <b>USD {ingreso_total:,.0f}</b>, <b>{pct_fantasma:.1f}%</b> de "
+            "las ventas no tiene respaldo en inventario (SKU fantasma) — dinero que circula sin control "
+            f"ni trazabilidad; <b>{pct_tardias:.1f}%</b> de las entregas incumple el SLA de "
+            f"{SLA_ENTREGA_DIAS} días, erosionando la confianza del cliente justo en el momento de la "
+            f"verdad; y donde existe feedback, el NPS promedio de apenas <b>{nps:.1f}</b> confirma que "
+            "el problema ya se siente en la calle. Las cinco secciones siguientes desglosan estos "
+            "hallazgos, cuantifican su costo y proponen una hoja de ruta concreta para la Junta.",
             estilo_cuerpo,
         )
     )
@@ -332,7 +398,9 @@ def construir_informe():
     story.append(
         Paragraph(
             "Metodología: Completitud 40 % + Unicidad 25 % + Consistencia 20 % + Validez 15 %. "
-            "Toda transformación queda registrada en reports/quality/log_limpieza_*.csv.",
+            "Toda transformación queda registrada en reports/quality/log_limpieza_*.csv. "
+            "Con datos ya validados y confiables, los siguientes cinco hallazgos representan las "
+            "prioridades estratégicas que exigen decisión de la Junta.",
             estilo_cuerpo,
         )
     )
@@ -349,15 +417,22 @@ def construir_informe():
         )
         story.append(
             Paragraph(
-                f"Se identificaron <b>{h1['n_sku']:,} SKUs</b> con margen negativo, por una pérdida "
-                f"acumulada de <b>USD {h1['perdida']:,.2f}</b>. El {h1['pct_online_neg']:.1f}% de esas "
-                f"ventas ocurre en el canal Online (frente a un {h1['pct_online_base']:.1f}% de "
-                f"participación general de ese canal), lo que apunta a {veredicto}.",
+                f"Cada uno de estos productos está, en la práctica, subsidiando a los clientes que lo "
+                f"compran: <b>{h1['n_sku']:,} SKUs</b> venden por debajo de su costo, acumulando una "
+                f"pérdida de <b>USD {h1['perdida']:,.2f}</b> que hoy nadie monitorea de forma "
+                f"sistemática. El {h1['pct_online_neg']:.1f}% de esas ventas ocurre en el canal Online "
+                f"(frente a un {h1['pct_online_base']:.1f}% de participación general de ese canal), lo "
+                f"que apunta a {veredicto}. Sin un mecanismo de alerta temprana, esta fuga seguirá "
+                "drenando margen mes a mes.",
                 estilo_cuerpo,
             )
         )
     else:
-        story.append(Paragraph("No se identificaron transacciones con margen negativo.", estilo_cuerpo))
+        story.append(
+            Paragraph(
+                "No se identificaron transacciones con margen negativo.", estilo_cuerpo
+            )
+        )
 
     h2 = hallazgos["q2"]
     story.append(Paragraph("2. Crisis Logística y Cuellos de Botella", estilo_h2))
@@ -366,23 +441,34 @@ def construir_informe():
         zona, corr, n = h2["peor_zona"]
         story.append(
             Paragraph(
-                f"La zona <b>{zona}</b> muestra la correlación más negativa entre tiempo de entrega y "
-                f"NPS ({corr:.2f}, n={n}): a mayor demora, más cae la satisfacción. Es la zona "
-                "prioritaria para un cambio inmediato de operador logístico.",
+                "La rentabilidad no es el único frente abierto: la logística está, literalmente, "
+                f"perdiendo clientes. En la zona <b>{zona}</b>, la correlación entre tiempo de entrega "
+                f"y NPS es la más negativa de toda la operación ({corr:.2f}, n={n}) — cada día "
+                "adicional de demora se traduce en clientes más insatisfechos. Esta es la zona "
+                "prioritaria para intervenir el contrato con el operador logístico actual, antes de "
+                "que el deterioro de servicio se traduzca en pérdida de clientes.",
                 estilo_cuerpo,
             )
         )
     else:
-        story.append(Paragraph("No hay suficientes datos con feedback para aislar una zona crítica.", estilo_cuerpo))
+        story.append(
+            Paragraph(
+                "No hay suficientes datos con feedback para aislar una zona crítica.",
+                estilo_cuerpo,
+            )
+        )
 
     h3 = hallazgos["q3"]
     story.append(Paragraph("3. Análisis de la Venta Invisible", estilo_h2))
     story.append(grafico_q3(df))
     story.append(
         Paragraph(
-            f"El <b>{h3['pct_riesgo']:.2f}%</b> del ingreso bruto (USD {h3['ingreso_riesgo']:,.2f} de un "
-            f"total de USD {h3['ingreso_total']:,.2f}) corresponde a ventas de SKUs sin respaldo en el "
-            "maestro de inventario. Es dinero que hoy opera sin control de costo ni trazabilidad.",
+            "Detrás de la fuga de margen y de los cuellos de botella logísticos hay una causa común: "
+            f"la compañía no sabe con certeza qué vende. <b>{h3['pct_riesgo']:.2f}%</b> del ingreso "
+            f"bruto — USD {h3['ingreso_riesgo']:,.2f} de un total de USD {h3['ingreso_total']:,.2f} — "
+            "corresponde a ventas de SKUs sin respaldo en el maestro de inventario. Este ingreso opera "
+            "sin control de costo ni trazabilidad y, como muestra la tendencia mensual, se sostiene en "
+            "el tiempo: no es un incidente puntual, es un patrón estructural.",
             estilo_cuerpo,
         )
     )
@@ -394,14 +480,21 @@ def construir_informe():
     if h4["categorias"]:
         story.append(
             Paragraph(
-                f"Las categorías <b>{', '.join(h4['categorias'])}</b> combinan alta disponibilidad de "
-                "stock con satisfacción por debajo de la mediana: la paradoja de tener producto "
-                "disponible pero no vendido con buena experiencia de cliente.",
+                "No todo el riesgo es de escasez. Las categorías "
+                f"<b>{', '.join(h4['categorias'])}</b> combinan alta disponibilidad de stock con "
+                "satisfacción por debajo de la mediana: el producto está en la bodega, pero no está "
+                "llegando al cliente en las condiciones que espera. Es capital inmovilizado generando "
+                "insatisfacción en lugar de ingresos.",
                 estilo_cuerpo,
             )
         )
     else:
-        story.append(Paragraph("No se detecta la paradoja de alto stock + bajo NPS en los datos actuales.", estilo_cuerpo))
+        story.append(
+            Paragraph(
+                "No se detecta la paradoja de alto stock + bajo NPS en los datos actuales.",
+                estilo_cuerpo,
+            )
+        )
 
     h5 = hallazgos["q5"]
     story.append(Paragraph("5. Storytelling de Riesgo Operativo", estilo_h2))
@@ -409,18 +502,36 @@ def construir_informe():
     if h5["bodega"]:
         story.append(
             Paragraph(
-                f"La bodega <b>{h5['bodega']}</b> combina la mayor antigüedad de revisión de stock "
-                f"({h5['antiguedad']:.0f} días) con una alta tasa de tickets de soporte "
-                f"({h5['soporte']:.1%}): es la bodega que más 'opera a ciegas' sobre su propio "
-                "inventario, con impacto directo en la satisfacción final del cliente.",
+                "El hilo conductor de los cinco hallazgos converge en un mismo punto operativo: la "
+                f"bodega <b>{h5['bodega']}</b>, que no revisa su inventario hace en promedio "
+                f"{h5['antiguedad']:.0f} días y concentra una tasa de tickets de soporte de "
+                f"{h5['soporte']:.1%}. Es la bodega que más 'opera a ciegas' sobre su propio "
+                "inventario, y su impacto se siente directamente en la satisfacción final del cliente. "
+                "Resolver su ciclo de revisión es, probablemente, la intervención de mayor "
+                "apalancamiento de todo este diagnóstico.",
                 estilo_cuerpo,
             )
         )
     else:
-        story.append(Paragraph("No hay suficientes datos cruzados de inventario y soporte por bodega.", estilo_cuerpo))
+        story.append(
+            Paragraph(
+                "No hay suficientes datos cruzados de inventario y soporte por bodega.",
+                estilo_cuerpo,
+            )
+        )
 
     story.append(Spacer(1, 0.5 * cm))
     story.append(Paragraph("Recomendaciones generales para la junta", estilo_h2))
+    story.append(
+        Paragraph(
+            "Los cinco hallazgos anteriores no son problemas aislados: son síntomas de una misma causa "
+            "raíz — la falta de una fuente única y confiable de información entre Inventario, "
+            "Logística y Feedback. Cerrar esa brecha es la decisión estratégica que tiene la Junta "
+            "frente a sí. Las siguientes cinco acciones atacan directamente cada uno de los frentes "
+            "identificados:",
+            estilo_cuerpo,
+        )
+    )
     story.append(
         Paragraph(
             "<b>1.</b> Bloquear ventas de SKU no catalogados y auditar altas en inventario. "
@@ -432,10 +543,21 @@ def construir_informe():
             estilo_cuerpo,
         )
     )
+    story.append(
+        Paragraph(
+            "Actuar sobre estos frentes no solo protege el margen ya erosionado: evita que la "
+            "'invisibilidad operativa' identificada en este diagnóstico se convierta en un problema "
+            "estructural de mayor escala. Recomendamos a la Junta priorizar su implementación en el "
+            "próximo trimestre y establecer revisiones periódicas de seguimiento sobre estos cinco "
+            "indicadores.",
+            estilo_cuerpo,
+        )
+    )
 
     doc.build(story)
 
     import shutil
+
     shutil.copy2(REPORT_PDF, REPORT_PDF_COPY)
     print(f"\nInforme generado (raíz): {os.path.normpath(REPORT_PDF)}")
     print(f"Copia en:              {os.path.normpath(REPORT_PDF_COPY)}")
