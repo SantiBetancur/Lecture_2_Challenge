@@ -186,16 +186,23 @@ Documentación completa: `docs/limpieza_datasets.md` y logs CSV.
 
 ## Solución de problemas
 
-| Problema | Acción |
-|----------|--------|
-| `FileNotFoundError` en pipeline | Verificar `data/raw/*.csv` |
-| Health Score vacío en dashboard | `make pipeline` |
-| PDF no aparece en sidebar | `make report` |
-| Error Groq / IA | Revisar API Key y cuota en console.groq.com |
-| Streamlit lento al inicio | Normal en primera carga (ejecuta pipelines) |
+En esta tabla se detallan las acciones a realizar en caso tal de que al intentar ejecutar o replicar el proyecto suceda algun error.
+
+| Problema | Causa probable | Acción |
+|----------|----------------|--------|
+| `FileNotFoundError` al correr el pipeline o al abrir la app | Faltan los CSV de entrada en `data/raw/` (o se ejecutó el comando fuera de la raíz del proyecto) | Compruebe que existan estos tres archivos: `inventario_central_v2.csv`, `transacciones_logistica_v2.csv`, `feedback_clientes_v2.csv`. Luego ejecute desde la raíz: `make pipeline` |
+| Health Score vacío / sin datos de calidad en el dashboard | Aún no se generaron `reports/quality/health_score_*.csv` ni los limpios en `data/interim/` | Ejecutar `make pipeline` (o `python scripts/run_pipeline.py`) |
+| El PDF no aparece en el sidebar (Descargas) | El informe aún no se ha generado en la raíz del proyecto | Ejecutar `make report` (o `python scripts/generate_report.py`) |
+| Error en la pestaña Recomendaciones IA (Groq) | API Key ausente, inválida o sin cuota | Revisar la key en el sidebar o en `.streamlit/secrets.toml` y la cuota en [console.groq.com](https://console.groq.com/) |
+| Streamlit tarda mucho en la primera carga | Comportamiento esperado: la app ejecuta los pipelines y cachea el resultado | Esperar la primera carga; las siguientes interacciones son rápidas |
 
 ---
 
-## Autor
+## Autores
 
-**Santiago Betancur** — Maestría en Ciencia de Datos, Universidad EAFIT.
+- **Santiago Betancur** 
+- **Santiago Acevedo urrego** 
+- **Jeronimo Acosta Acevedo** 
+
+
+Maestría en Ciencia de Datos, Universidad EAFIT.
